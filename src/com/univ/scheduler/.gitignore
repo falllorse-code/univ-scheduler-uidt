@@ -1,0 +1,17 @@
+# Fichiers de configuration
+config.properties
+
+# Fichiers temporaires
+*.log
+*.tmp
+
+# Dossier de build
+bin/
+target/
+build/
+
+# Eclipse
+.settings/
+.classpath
+.project
+.metadata/

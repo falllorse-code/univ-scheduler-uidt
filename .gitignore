@@ -1,0 +1,40 @@
+# Compiled class files
+*.class
+target/
+*.jar
+*.war
+*.ear
+
+# IDE files
+.idea/
+*.iml
+.project
+.classpath
+.settings/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Database
+*.db
+*.sqlite
+
+# Configuration (sensitive)
+config.properties
+*.properties
+
+# Temporary files
+*.tmp
+*.bak
+# Compiled files
+bin/
+out/
+target/
+*.class
