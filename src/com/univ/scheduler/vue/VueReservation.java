@@ -62,9 +62,22 @@ public class VueReservation {
         Platform.runLater(() -> {
             reservationDAO.mettreAJourStatuts();
             toutesReservations.clear();
-            toutesReservations.addAll(reservationDAO.getReservationsParUtilisateur(utilisateurCourant.getId()));
+            
+            // Si l'utilisateur est ADMIN, voir TOUTES les réservations
+            if ("admin".equals(utilisateurCourant.getRole()) || "manager".equals(utilisateurCourant.getRole())) {
+                // Récupérer toutes les réservations (tous utilisateurs)
+                List<Reservation> toutesLesResas = reservationDAO.getToutesLesReservations();
+                toutesReservations.addAll(toutesLesResas);
+                infoLabel.setText("Mode Admin - Toutes les réservations");
+            } else {
+                // Sinon, seulement ses réservations
+                toutesReservations.addAll(reservationDAO.getReservationsParUtilisateur(utilisateurCourant.getId()));
+                infoLabel.setText("Mes réservations");
+            }
+            
             filtrerReservations();
-            infoLabel.setText("Dernière mise à jour: " + 
+            
+            infoLabel.setText(infoLabel.getText() + " - Dernière mise à jour: " + 
                 java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")));
         });
     }
@@ -75,7 +88,7 @@ public class VueReservation {
         racine.setStyle("-fx-background-color: #f5f7fa;");
         
         // Titre
-        Label titreLabel = new Label("📅 Mes réservations en temps réel");
+        Label titreLabel = new Label("📅 Gestion des réservations en temps réel");
         titreLabel.setStyle("-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;");
         
         infoLabel = new Label("Mise à jour toutes les 30 secondes");
@@ -113,6 +126,11 @@ public class VueReservation {
         tableReservations.setPrefHeight(400);
         tableReservations.setPlaceholder(new Label("Aucune réservation pour le moment"));
         tableReservations.setStyle("-fx-font-size: 13px;");
+        
+        // Colonnes supplémentaires pour l'admin
+        TableColumn<Reservation, String> colUtilisateur = new TableColumn<>("Utilisateur");
+        colUtilisateur.setCellValueFactory(new PropertyValueFactory<>("nomUtilisateur"));
+        colUtilisateur.setPrefWidth(150);
         
         TableColumn<Reservation, String> colSalle = new TableColumn<>("Salle");
         colSalle.setCellValueFactory(new PropertyValueFactory<>("nomSalle"));
@@ -157,7 +175,12 @@ public class VueReservation {
             }
         });
         
-        tableReservations.getColumns().addAll(colSalle, colTitre, colDate, colHoraire, colStatut);
+        // Ajouter les colonnes selon le rôle
+        if ("admin".equals(utilisateurCourant.getRole()) || "manager".equals(utilisateurCourant.getRole())) {
+            tableReservations.getColumns().addAll(colUtilisateur, colSalle, colTitre, colDate, colHoraire, colStatut);
+        } else {
+            tableReservations.getColumns().addAll(colSalle, colTitre, colDate, colHoraire, colStatut);
+        }
         
         // Bouton Annuler
         Button btnAnnuler = new Button("🗑️ Annuler la réservation");
@@ -283,7 +306,7 @@ public class VueReservation {
         Label messageLabel = new Label();
         messageLabel.setStyle("-fx-text-fill: #e74c3c;");
         
-        Button btnVerifier = new Button("Vérifier disponibilité");
+        Button btnVerifier = new Button("🔍 Vérifier disponibilité");
         btnVerifier.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold;");
         btnVerifier.setOnAction(e -> {
             String salleNom = comboSalle.getValue();
@@ -332,6 +355,7 @@ public class VueReservation {
                     LocalTime debut = LocalTime.parse(comboHeureDebut.getValue());
                     LocalTime fin = LocalTime.parse(comboHeureFin.getValue());
                     
+                    // Vérification des conflits AVANT d'enregistrer
                     if (!reservationDAO.estSalleDisponible(salle.getId(), date, debut, fin)) {
                         Alert alert = new Alert(Alert.AlertType.ERROR);
                         alert.setTitle("Erreur");
@@ -360,6 +384,7 @@ public class VueReservation {
                     reservation.setHeureFin(fin);
                     reservation.setStatut("confirmée");
                     reservation.setNomSalle(salle.getNomCompletSalle());
+                    reservation.setNomUtilisateur(utilisateurCourant.getNomComplet());
                     
                     return reservation;
                 }
@@ -428,7 +453,9 @@ public class VueReservation {
             return;
         }
         
-        if (selection.getUtilisateurId() != utilisateurCourant.getId()) {
+        // Seul l'admin ou le propriétaire peuvent annuler
+        if (selection.getUtilisateurId() != utilisateurCourant.getId() && 
+            !"admin".equals(utilisateurCourant.getRole())) {
             Alert alert = new Alert(Alert.AlertType.ERROR);
             alert.setTitle("Erreur");
             alert.setHeaderText("Annulation impossible");

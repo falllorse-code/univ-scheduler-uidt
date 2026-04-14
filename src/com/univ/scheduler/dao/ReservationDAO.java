@@ -44,23 +44,23 @@ public class ReservationDAO {
     
     // Vérifier si une salle est disponible pour une réservation
     public boolean estSalleDisponible(int salleId, LocalDate date, LocalTime heureDebut, LocalTime heureFin) {
-        String sql = "SELECT * FROM reservations WHERE room_id = ? AND reservation_date = ? AND status = 'confirmed' " +
-                     "AND ((start_time <= ? AND end_time > ?) OR (start_time < ? AND end_time >= ?))";
+        String sql = "SELECT COUNT(*) FROM reservations WHERE room_id = ? AND reservation_date = ? AND status = 'confirmée' " +
+                     "AND start_time < ? AND end_time > ?";
         
         try (PreparedStatement stmt = ConnexionBD.getConnexion().prepareStatement(sql)) {
             stmt.setInt(1, salleId);
             stmt.setDate(2, Date.valueOf(date));
-            stmt.setTime(3, Time.valueOf(heureDebut));
+            stmt.setTime(3, Time.valueOf(heureFin));
             stmt.setTime(4, Time.valueOf(heureDebut));
-            stmt.setTime(5, Time.valueOf(heureFin));
-            stmt.setTime(6, Time.valueOf(heureFin));
             
             ResultSet rs = stmt.executeQuery();
-            return !rs.next(); // Pas de réservation = disponible
+            if (rs.next()) {
+                return rs.getInt(1) == 0; // true si 0 réservation
+            }
         } catch (SQLException e) {
             e.printStackTrace();
-            return false;
         }
+        return false;
     }
     
     // Récupérer toutes les réservations d'une salle
@@ -227,5 +227,37 @@ public class ReservationDAO {
             e.printStackTrace();
         }
         return false;
+    }
+    public List<Reservation> getToutesLesReservations() {
+        List<Reservation> reservations = new ArrayList<>();
+        String sql = "SELECT r.*, u.first_name, u.last_name, s.room_number, b.name as building_name " +
+                     "FROM reservations r " +
+                     "JOIN users u ON r.user_id = u.id " +
+                     "JOIN rooms s ON r.room_id = s.id " +
+                     "LEFT JOIN buildings b ON s.building_id = b.id " +
+                     "ORDER BY r.reservation_date DESC, r.start_time DESC";
+        
+        try (Statement stmt = ConnexionBD.getConnexion().createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            
+            while (rs.next()) {
+                Reservation r = new Reservation();
+                r.setId(rs.getInt("id"));
+                r.setSalleId(rs.getInt("room_id"));
+                r.setNomSalle(rs.getString("building_name") + " - " + rs.getString("room_number"));
+                r.setUtilisateurId(rs.getInt("user_id"));
+                r.setNomUtilisateur(rs.getString("first_name") + " " + rs.getString("last_name"));
+                r.setTitre(rs.getString("title"));
+                r.setDescription(rs.getString("description"));
+                r.setDate(rs.getDate("reservation_date").toLocalDate());
+                r.setHeureDebut(rs.getTime("start_time").toLocalTime());
+                r.setHeureFin(rs.getTime("end_time").toLocalTime());
+                r.setStatut(rs.getString("status"));
+                reservations.add(r);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return reservations;
     }
 }

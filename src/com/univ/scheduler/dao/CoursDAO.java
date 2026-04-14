@@ -142,4 +142,147 @@ public class CoursDAO {
         }
         return cours;
     }
+ // Vérifier si un cours est en conflit avec d'autres
+    public List<Cours> getCoursEnConflit(Cours nouveauCours) {
+        List<Cours> conflits = new ArrayList<>();
+        String sql = "SELECT c.*, " +
+                     "CONCAT(u.first_name, ' ', u.last_name) as enseignant_nom, " +
+                     "CONCAT(b.name, ' - ', r.room_number) as salle_nom " +
+                     "FROM courses c " +
+                     "LEFT JOIN users u ON c.enseignant_id = u.id " +
+                     "LEFT JOIN rooms r ON c.salle_id = r.id " +
+                     "LEFT JOIN buildings b ON r.building_id = b.id " +
+                     "WHERE c.id != ? " +
+                     "AND c.salle_id = ? " +
+                     "AND c.jour_semaine = ? " +
+                     "AND ((c.heure_debut < ? AND ADDTIME(c.heure_debut, SEC_TO_TIME(c.duree*60)) > ?) " +
+                     "OR (c.heure_debut < ? AND ADDTIME(c.heure_debut, SEC_TO_TIME(c.duree*60)) > ?))";
+        
+        try (PreparedStatement stmt = ConnexionBD.getConnexion().prepareStatement(sql)) {
+            LocalTime heureDebut = nouveauCours.getHeureDebut();
+            LocalTime heureFin = nouveauCours.getHeureFin();
+            
+            stmt.setInt(1, nouveauCours.getId());
+            stmt.setInt(2, nouveauCours.getSalleId());
+            stmt.setString(3, nouveauCours.getJourSemaine());
+            stmt.setTime(4, Time.valueOf(heureFin));
+            stmt.setTime(5, Time.valueOf(heureDebut));
+            stmt.setTime(6, Time.valueOf(heureFin));
+            stmt.setTime(7, Time.valueOf(heureDebut));
+            
+            ResultSet rs = stmt.executeQuery();
+            
+            while (rs.next()) {
+                Cours c = new Cours();
+                c.setId(rs.getInt("id"));
+                c.setNom(rs.getString("nom"));
+                c.setEnseignantId(rs.getInt("enseignant_id"));
+                c.setNomEnseignant(rs.getString("enseignant_nom"));
+                c.setClasse(rs.getString("classe"));
+                c.setGroupe(rs.getString("groupe"));
+                c.setJourSemaine(rs.getString("jour_semaine"));
+                c.setHeureDebut(rs.getTime("heure_debut").toLocalTime());
+                c.setDuree(rs.getInt("duree"));
+                c.setSalleId(rs.getInt("salle_id"));
+                c.setNomSalle(rs.getString("salle_nom"));
+                conflits.add(c);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return conflits;
+    }
+
+    // Vérifier les conflits pour un enseignant (même heure sur deux cours différents)
+    public List<Cours> getConflitsEnseignant(Cours nouveauCours) {
+        List<Cours> conflits = new ArrayList<>();
+        String sql = "SELECT c.*, " +
+                     "CONCAT(u.first_name, ' ', u.last_name) as enseignant_nom, " +
+                     "CONCAT(b.name, ' - ', r.room_number) as salle_nom " +
+                     "FROM courses c " +
+                     "LEFT JOIN users u ON c.enseignant_id = u.id " +
+                     "LEFT JOIN rooms r ON c.salle_id = r.id " +
+                     "LEFT JOIN buildings b ON r.building_id = b.id " +
+                     "WHERE c.id != ? " +
+                     "AND c.enseignant_id = ? " +
+                     "AND c.jour_semaine = ? " +
+                     "AND ((c.heure_debut < ? AND ADDTIME(c.heure_debut, SEC_TO_TIME(c.duree*60)) > ?) " +
+                     "OR (c.heure_debut < ? AND ADDTIME(c.heure_debut, SEC_TO_TIME(c.duree*60)) > ?))";
+        
+        try (PreparedStatement stmt = ConnexionBD.getConnexion().prepareStatement(sql)) {
+            LocalTime heureDebut = nouveauCours.getHeureDebut();
+            LocalTime heureFin = nouveauCours.getHeureFin();
+            
+            stmt.setInt(1, nouveauCours.getId());
+            stmt.setInt(2, nouveauCours.getEnseignantId());
+            stmt.setString(3, nouveauCours.getJourSemaine());
+            stmt.setTime(4, Time.valueOf(heureFin));
+            stmt.setTime(5, Time.valueOf(heureDebut));
+            stmt.setTime(6, Time.valueOf(heureFin));
+            stmt.setTime(7, Time.valueOf(heureDebut));
+            
+            ResultSet rs = stmt.executeQuery();
+            
+            while (rs.next()) {
+                Cours c = new Cours();
+                c.setId(rs.getInt("id"));
+                c.setNom(rs.getString("nom"));
+                c.setEnseignantId(rs.getInt("enseignant_id"));
+                c.setNomEnseignant(rs.getString("enseignant_nom"));
+                c.setClasse(rs.getString("classe"));
+                c.setGroupe(rs.getString("groupe"));
+                c.setJourSemaine(rs.getString("jour_semaine"));
+                c.setHeureDebut(rs.getTime("heure_debut").toLocalTime());
+                c.setDuree(rs.getInt("duree"));
+                c.setSalleId(rs.getInt("salle_id"));
+                c.setNomSalle(rs.getString("salle_nom"));
+                conflits.add(c);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return conflits;
+    }
+
+    // Récupérer tous les conflits existants dans l'emploi du temps
+    public List<Cours[]> getTousLesConflits() {
+        List<Cours[]> conflitsList = new ArrayList<>();
+        List<Cours> tousLesCours = getTousLesCours();
+        
+        for (int i = 0; i < tousLesCours.size(); i++) {
+            for (int j = i + 1; j < tousLesCours.size(); j++) {
+                Cours c1 = tousLesCours.get(i);
+                Cours c2 = tousLesCours.get(j);
+                
+                // Même salle et même jour
+                if (c1.getSalleId() == c2.getSalleId() && 
+                    c1.getJourSemaine().equals(c2.getJourSemaine())) {
+                    
+                    LocalTime debut1 = c1.getHeureDebut();
+                    LocalTime fin1 = c1.getHeureFin();
+                    LocalTime debut2 = c2.getHeureDebut();
+                    LocalTime fin2 = c2.getHeureFin();
+                    
+                    if (debut1.isBefore(fin2) && debut2.isBefore(fin1)) {
+                        conflitsList.add(new Cours[]{c1, c2});
+                    }
+                }
+                // Même enseignant et même jour
+                else if (c1.getEnseignantId() == c2.getEnseignantId() && 
+                         c1.getJourSemaine().equals(c2.getJourSemaine())) {
+                    
+                    LocalTime debut1 = c1.getHeureDebut();
+                    LocalTime fin1 = c1.getHeureFin();
+                    LocalTime debut2 = c2.getHeureDebut();
+                    LocalTime fin2 = c2.getHeureFin();
+                    
+                    if (debut1.isBefore(fin2) && debut2.isBefore(fin1)) {
+                        conflitsList.add(new Cours[]{c1, c2});
+                    }
+                }
+            }
+        }
+        
+        return conflitsList;
+    }
 }

@@ -28,6 +28,7 @@ import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
@@ -421,6 +422,10 @@ public class VueCours {
             if (verifierConflit(cours)) {
                 showAlert("Conflit", "❌ Ce cours crée un conflit avec un cours existant !", Alert.AlertType.WARNING);
             } else {
+            	// Dans la méthode ajouterCours(), avant d'appeler coursDAO.ajouterCours()
+            	if (verifierConflitAvantAjout(cours)) {
+            	    return;
+            	}
                 if (coursDAO.ajouterCours(cours)) {
                     chargerCours();
                     showAlert("Succès", "✅ Cours ajouté avec succès", Alert.AlertType.INFORMATION);
@@ -699,46 +704,223 @@ public class VueCours {
     }
     
     private void verifierConflits() {
-        StringBuilder conflits = new StringBuilder();
-        int nbConflits = 0;
+        List<Cours[]> conflits = coursDAO.getTousLesConflits();
         
-        for (int i = 0; i < tousLesCours.size(); i++) {
-            for (int j = i + 1; j < tousLesCours.size(); j++) {
-                Cours c1 = tousLesCours.get(i);
-                Cours c2 = tousLesCours.get(j);
+        if (conflits.isEmpty()) {
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Vérification des conflits");
+            alert.setHeaderText("✅ Aucun conflit détecté");
+            alert.setContentText("L'emploi du temps est cohérent.");
+            alert.showAndWait();
+            return;
+        }
+        
+        // Créer un dialogue pour afficher et résoudre les conflits
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("⚠️ Gestion des conflits");
+        dialog.setHeaderText(conflits.size() + " conflit(s) détecté(s)");
+        
+        ButtonType btnResolver = new ButtonType("Résoudre", ButtonBar.ButtonData.OK_DONE);
+        ButtonType btnIgnorer = new ButtonType("Ignorer", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(btnResolver, btnIgnorer);
+        
+        VBox content = new VBox(10);
+        content.setPadding(new Insets(20));
+        content.setPrefWidth(600);
+        
+        Label titreLabel = new Label("Liste des conflits :");
+        titreLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+        content.getChildren().add(titreLabel);
+        
+        ListView<String> conflitList = new ListView<>();
+        
+        for (int i = 0; i < conflits.size(); i++) {
+            Cours[] conflit = conflits.get(i);
+            String info = "⚠️ Conflit " + (i + 1) + " :\n" +
+                          "   📚 " + conflit[0].getNom() + " (Salle: " + conflit[0].getNomSalle() + ")\n" +
+                          "   📚 " + conflit[1].getNom() + " (Salle: " + conflit[1].getNomSalle() + ")\n" +
+                          "   📅 " + conflit[0].getJourSemaine() + " " + conflit[0].getPlageHoraire() + "\n" +
+                          "   👨‍🏫 Enseignant: " + conflit[0].getNomEnseignant();
+            conflitList.getItems().add(info);
+        }
+        
+        content.getChildren().add(conflitList);
+        
+        // Boutons pour résoudre automatiquement
+        HBox buttonBox = new HBox(10);
+        Button btnResoudreSalle = new Button("🔧 Réaffecter les salles");
+        Button btnResoudreHoraire = new Button("⏰ Décaler les horaires");
+        Button btnResoudreManuel = new Button("✏️ Résolution manuelle");
+        
+        btnResoudreSalle.setStyle("-fx-background-color: #3498db; -fx-text-fill: white;");
+        btnResoudreHoraire.setStyle("-fx-background-color: #e67e22; -fx-text-fill: white;");
+        btnResoudreManuel.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white;");
+        
+        buttonBox.getChildren().addAll(btnResoudreSalle, btnResoudreHoraire, btnResoudreManuel);
+        content.getChildren().add(buttonBox);
+        
+        dialog.getDialogPane().setContent(content);
+        
+        // Action pour résoudre automatiquement les conflits de salles
+        btnResoudreSalle.setOnAction(e -> {
+            resoudreConflitsSalles(conflits);
+            chargerCours();
+            dialog.close();
+            showAlert("Succès", "Les conflits ont été résolus automatiquement", Alert.AlertType.INFORMATION);
+        });
+        
+        // Action pour décaler les horaires
+        btnResoudreHoraire.setOnAction(e -> {
+            resoudreConflitsHoraires(conflits);
+            chargerCours();
+            dialog.close();
+            showAlert("Succès", "Les horaires ont été ajustés", Alert.AlertType.INFORMATION);
+        });
+        
+        // Action pour résolution manuelle
+        btnResoudreManuel.setOnAction(e -> {
+            Cours conflitSelectionne = null;
+            // Ouvrir le dialogue de modification pour le premier conflit
+            if (!conflits.isEmpty()) {
+                modifierCoursManuel(conflits.get(0)[0]);
+            }
+            dialog.close();
+        });
+        
+        dialog.showAndWait();
+    }
+
+    // Résoudre les conflits en réaffectant les salles
+    private void resoudreConflitsSalles(List<Cours[]> conflits) {
+        SalleDAO salleDAO = new SalleDAO();
+        List<Salle> sallesDisponibles = salleDAO.getToutesLesSalles();
+        
+        for (Cours[] conflit : conflits) {
+            for (Cours cours : conflit) {
+                // Chercher une salle disponible
+                Salle nouvelleSalle = sallesDisponibles.stream()
+                    .filter(s -> s.getCapacite() >= 30) // Capacité minimale
+                    .filter(s -> !s.getType().equals("RESTAURANT"))
+                    .filter(s -> !s.getType().equals("BIBLIOTHEQUE"))
+                    .findFirst()
+                    .orElse(null);
                 
-                if (c1.getNomSalle() != null && c2.getNomSalle() != null &&
-                    c1.getNomSalle().equals(c2.getNomSalle()) &&
-                    c1.getJourSemaine().equals(c2.getJourSemaine())) {
-                    
-                    LocalTime debut1 = c1.getHeureDebut();
-                    LocalTime fin1 = c1.getHeureFin();
-                    LocalTime debut2 = c2.getHeureDebut();
-                    LocalTime fin2 = c2.getHeureFin();
-                    
-                    if (debut1.isBefore(fin2) && debut2.isBefore(fin1)) {
-                        nbConflits++;
-                        conflits.append("• ")
-                                .append(c1.getNom()).append(" et ")
-                                .append(c2.getNom()).append(" en ")
-                                .append(c1.getNomSalle()).append(" le ")
-                                .append(c1.getJourSemaine()).append("\n");
-                    }
+                if (nouvelleSalle != null && nouvelleSalle.getId() != cours.getSalleId()) {
+                    cours.setSalleId(nouvelleSalle.getId());
+                    cours.setNomSalle(nouvelleSalle.getNomCompletSalle());
+                    coursDAO.modifierCours(cours);
                 }
             }
         }
-        
-        Alert alert = new Alert(nbConflits > 0 ? Alert.AlertType.WARNING : Alert.AlertType.INFORMATION);
-        alert.setTitle("Vérification des conflits");
-        
-        if (nbConflits > 0) {
-            alert.setHeaderText("⚠️ " + nbConflits + " conflit(s) détecté(s) !");
-            alert.setContentText(conflits.toString());
-        } else {
-            alert.setHeaderText("✅ Aucun conflit détecté");
-            alert.setContentText("L'emploi du temps est cohérent.");
+    }
+
+    // Résoudre les conflits en décalant les horaires
+    private void resoudreConflitsHoraires(List<Cours[]> conflits) {
+        for (Cours[] conflit : conflits) {
+            Cours cours2 = conflit[1];
+            LocalTime nouveauDebut = cours2.getHeureFin();
+            
+            // Vérifier que le nouveau créneau est dans la journée (8h-20h)
+            if (nouveauDebut.getHour() < 20) {
+                cours2.setHeureDebut(nouveauDebut);
+                coursDAO.modifierCours(cours2);
+            }
         }
-        alert.showAndWait();
+    }
+
+    // Modifier un cours manuellement pour résoudre le conflit
+    private void modifierCoursManuel(Cours cours) {
+        Dialog<Cours> dialog = new Dialog<>();
+        dialog.setTitle("Résolution de conflit");
+        dialog.setHeaderText("Modifier le cours en conflit : " + cours.getNom());
+        
+        ButtonType btnValider = new ButtonType("Modifier", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(btnValider, ButtonType.CANCEL);
+        
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(20));
+        
+        // Sélecteur de salle
+        Label salleLabel = new Label("Nouvelle salle:");
+        ComboBox<String> comboSalle = new ComboBox<>();
+        comboSalle.setItems(listeSalles);
+        comboSalle.setValue(cours.getNomSalle() + " (Cap: " + getCapaciteSalle(cours.getSalleId()) + ")");
+        
+        // Sélecteur de jour
+        Label jourLabel = new Label("Jour:");
+        ComboBox<String> comboJour = new ComboBox<>();
+        comboJour.getItems().addAll("LUNDI", "MARDI", "MERCREDI", "JEUDI", "VENDREDI", "SAMEDI");
+        comboJour.setValue(cours.getJourSemaine());
+        
+        // Sélecteur d'heure
+        Label heureLabel = new Label("Heure début:");
+        ComboBox<String> comboHeure = new ComboBox<>();
+        for (int h = 8; h <= 18; h++) {
+            comboHeure.getItems().add(String.format("%02d:00", h));
+            comboHeure.getItems().add(String.format("%02d:30", h));
+        }
+        comboHeure.setValue(cours.getHeureDebut().toString());
+        
+        grid.add(salleLabel, 0, 0);
+        grid.add(comboSalle, 1, 0);
+        grid.add(jourLabel, 0, 1);
+        grid.add(comboJour, 1, 1);
+        grid.add(heureLabel, 0, 2);
+        grid.add(comboHeure, 1, 2);
+        
+        dialog.getDialogPane().setContent(grid);
+        
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == btnValider) {
+                cours.setSalleId(extraireIdSalle(comboSalle.getValue()));
+                cours.setNomSalle(comboSalle.getValue().split(" \\(")[0]);
+                cours.setJourSemaine(comboJour.getValue());
+                cours.setHeureDebut(LocalTime.parse(comboHeure.getValue()));
+                return cours;
+            }
+            return null;
+        });
+        
+        dialog.showAndWait().ifPresent(c -> {
+            if (coursDAO.modifierCours(c)) {
+                chargerCours();
+                showAlert("Succès", "Cours modifié avec succès", Alert.AlertType.INFORMATION);
+            }
+        });
+    }
+
+    // Vérifier les conflits AVANT d'ajouter un cours
+    private boolean verifierConflitAvantAjout(Cours nouveauCours) {
+        List<Cours> conflitsSalle = coursDAO.getCoursEnConflit(nouveauCours);
+        List<Cours> conflitsEnseignant = coursDAO.getConflitsEnseignant(nouveauCours);
+        
+        if (!conflitsSalle.isEmpty() || !conflitsEnseignant.isEmpty()) {
+            StringBuilder message = new StringBuilder("⚠️ Conflit(s) détecté(s) :\n\n");
+            
+            if (!conflitsSalle.isEmpty()) {
+                message.append("📌 Conflit de salle avec :\n");
+                for (Cours c : conflitsSalle) {
+                    message.append("   • ").append(c.getNom()).append(" (").append(c.getPlageHoraire()).append(")\n");
+                }
+            }
+            
+            if (!conflitsEnseignant.isEmpty()) {
+                message.append("\n📌 Conflit d'enseignant avec :\n");
+                for (Cours c : conflitsEnseignant) {
+                    message.append("   • ").append(c.getNom()).append(" (").append(c.getPlageHoraire()).append(")\n");
+                }
+            }
+            
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("Conflit détecté");
+            alert.setHeaderText("Impossible d'ajouter le cours");
+            alert.setContentText(message.toString());
+            alert.showAndWait();
+            return true;
+        }
+        return false;
     }
     
     // ============================================

@@ -44,10 +44,13 @@ public class VueCarte {
     private Label nomBatimentLabel;
     private ListView<String> listeSalles;
     private Map<String, List<Circle>> cerclesSallesParBatiment;
+    private Map<String, List<Rectangle>> rectanglesRestaurantsParBatiment;
     private Map<String, List<Salle>> sallesReelles;
     private Timeline synchronisationTimer;
+    private Rectangle bibliothequeIcon;
+    private Text bibliothequeText;
     
-    // Coordonnées des bâtiments sur la carte (x, y, largeur, hauteur)
+    // Coordonnées des bâtiments sur la carte
     private final Map<String, int[]> positionsBatiments = new HashMap<>();
     
     public VueCarte(Utilisateur utilisateur) {
@@ -57,6 +60,7 @@ public class VueCarte {
         this.sallesParBatiment = new HashMap<>();
         this.capaciteBatiments = new HashMap<>();
         this.cerclesSallesParBatiment = new HashMap<>();
+        this.rectanglesRestaurantsParBatiment = new HashMap<>();
         this.sallesReelles = new HashMap<>();
         
         // Définir les positions des bâtiments
@@ -76,7 +80,7 @@ public class VueCarte {
         List<Salle> toutesSalles = salleDAO.getToutesLesSalles();
         
         sallesReelles.clear();
-        // Initialiser tous les bâtiments même s'ils n'ont pas de salles
+        // Initialiser tous les bâtiments
         sallesReelles.put("Bâtiment A", new ArrayList<>());
         sallesReelles.put("Bâtiment B", new ArrayList<>());
         sallesReelles.put("Bâtiment C", new ArrayList<>());
@@ -90,6 +94,36 @@ public class VueCarte {
             if (sallesReelles.containsKey(nomBatiment)) {
                 sallesReelles.get(nomBatiment).add(salle);
             }
+        }
+        
+        // ✅ FORCER l'ajout des restaurants et bibliothèque dans sallesParBatiment
+        // Créer des salles virtuelles si nécessaire
+        if (sallesReelles.get("Restaurants").isEmpty()) {
+            Salle resto1 = new Salle();
+            resto1.setId(100);
+            resto1.setNomBatiment("Restaurants");
+            resto1.setNumeroSalle("Resto U 1");
+            resto1.setCapacite(200);
+            resto1.setType("RESTAURANT");
+            sallesReelles.get("Restaurants").add(resto1);
+            
+            Salle resto2 = new Salle();
+            resto2.setId(101);
+            resto2.setNomBatiment("Restaurants");
+            resto2.setNumeroSalle("Resto U 2");
+            resto2.setCapacite(150);
+            resto2.setType("RESTAURANT");
+            sallesReelles.get("Restaurants").add(resto2);
+        }
+        
+        if (sallesReelles.get("Bibliothèque").isEmpty()) {
+            Salle bibliotheque = new Salle();
+            bibliotheque.setId(102);
+            bibliotheque.setNomBatiment("Bibliothèque");
+            bibliotheque.setNumeroSalle("Bibliothèque Universitaire");
+            bibliotheque.setCapacite(150);
+            bibliotheque.setType("BIBLIOTHEQUE");
+            sallesReelles.get("Bibliothèque").add(bibliotheque);
         }
     }
     
@@ -106,12 +140,13 @@ public class VueCarte {
             LocalDate aujourdHui = LocalDate.now();
             LocalTime maintenant = LocalTime.now();
             
+            // Mettre à jour les cercles des salles de cours
             for (Map.Entry<String, List<Circle>> entry : cerclesSallesParBatiment.entrySet()) {
                 String nomBatiment = entry.getKey();
                 List<Circle> cercles = entry.getValue();
                 List<Salle> salles = sallesReelles.get(nomBatiment);
                 
-                if (salles == null || cercles == null || salles.size() != cercles.size()) continue;
+                if (salles == null || cercles == null) continue;
                 
                 for (int i = 0; i < salles.size() && i < cercles.size(); i++) {
                     Salle salle = salles.get(i);
@@ -133,6 +168,51 @@ public class VueCarte {
                 }
             }
             
+            // Mettre à jour les rectangles des restaurants
+            for (Map.Entry<String, List<Rectangle>> entry : rectanglesRestaurantsParBatiment.entrySet()) {
+                String nomBatiment = entry.getKey();
+                List<Rectangle> rectangles = entry.getValue();
+                List<Salle> salles = sallesReelles.get(nomBatiment);
+                
+                if (salles == null || rectangles == null) continue;
+                
+                for (int i = 0; i < salles.size() && i < rectangles.size(); i++) {
+                    Salle salle = salles.get(i);
+                    Rectangle rectangle = rectangles.get(i);
+                    int heure = LocalTime.now().getHour();
+                    
+                    boolean estOuvert = (heure >= 11 && heure <= 14) || (heure >= 18 && heure <= 21);
+                    
+                    if (estOuvert) {
+                        rectangle.setFill(Color.rgb(46, 204, 113));
+                        Tooltip tooltip = new Tooltip(salle.getNumeroSalle() + " - 🍽️ " +
+                                                      "Cap: " + salle.getCapacite() + " places - 🟢 OUVERT");
+                        Tooltip.install(rectangle, tooltip);
+                    } else {
+                        rectangle.setFill(Color.rgb(231, 76, 60));
+                        Tooltip tooltip = new Tooltip(salle.getNumeroSalle() + " - 🍽️ " +
+                                                      "Cap: " + salle.getCapacite() + " places - 🔴 FERMÉ");
+                        Tooltip.install(rectangle, tooltip);
+                    }
+                }
+            }
+            
+            // Mettre à jour la bibliothèque
+            if (bibliothequeIcon != null) {
+                int heure = LocalTime.now().getHour();
+                boolean estOuverte = (heure >= 8 && heure <= 20);
+                if (estOuverte) {
+                    bibliothequeIcon.setFill(Color.rgb(46, 204, 113));
+                    Tooltip tooltip = new Tooltip("Bibliothèque Universitaire - 🟢 OUVERTE\n📖 Horaires: 08h00 - 20h00");
+                    Tooltip.install(bibliothequeIcon, tooltip);
+                } else {
+                    bibliothequeIcon.setFill(Color.rgb(231, 76, 60));
+                    Tooltip tooltip = new Tooltip("Bibliothèque Universitaire - 🔴 FERMÉE\n📖 Horaires: 08h00 - 20h00");
+                    Tooltip.install(bibliothequeIcon, tooltip);
+                }
+            }
+            
+            // Si un bâtiment est sélectionné, mettre à jour les stats
             if (nomBatimentLabel != null && !nomBatimentLabel.getText().equals("Aucun bâtiment sélectionné")) {
                 afficherSallesBatiment(nomBatimentLabel.getText());
             }
@@ -276,8 +356,15 @@ public class VueCarte {
             // Récupérer les salles de ce bâtiment
             List<Salle> salles = sallesReelles.getOrDefault(nomBatiment, new ArrayList<>());
             
-            // ✅ NE PAS AJOUTER DE CERCLES pour Bibliothèque et Restaurants
-            if (nomBatiment.equals("Bibliothèque") || nomBatiment.equals("Restaurants")) {
+            // Gestion spécifique pour les restaurants
+            if (nomBatiment.equals("Restaurants")) {
+                ajouterRestaurants(pane, pos, salles);
+                continue;
+            }
+            
+            // Gestion spécifique pour la bibliothèque
+            if (nomBatiment.equals("Bibliothèque")) {
+                ajouterBibliotheque(pane, pos);
                 continue;
             }
             
@@ -345,6 +432,92 @@ public class VueCarte {
         }
     }
     
+    private void ajouterRestaurants(Pane pane, int[] pos, List<Salle> restaurants) {
+        List<Rectangle> rectangles = new ArrayList<>();
+        
+        for (int i = 0; i < restaurants.size(); i++) {
+            Salle resto = restaurants.get(i);
+            int x = pos[0] + 50 + (i * 100);
+            int y = pos[1] + 40;
+            
+            Rectangle restoRect = new Rectangle(x - 15, y - 10, 30, 20);
+            restoRect.setArcWidth(8);
+            restoRect.setArcHeight(8);
+            restoRect.setFill(Color.rgb(230, 126, 34));
+            restoRect.setStroke(Color.WHITE);
+            restoRect.setStrokeWidth(1.5);
+            
+            Text iconText = new Text(x - 5, y + 5, "🍽️");
+            iconText.setFont(Font.font("System", 14));
+            
+            Tooltip tooltip = new Tooltip(resto.getNumeroSalle() + "\n🍽️ Capacité: " + 
+                                          resto.getCapacite() + " places\n🍴 Service: 11h30-14h30 et 18h30-21h00");
+            Tooltip.install(restoRect, tooltip);
+            
+            final String nomResto = resto.getNumeroSalle();
+            final int capaciteResto = resto.getCapacite();
+            
+            restoRect.setOnMouseClicked(event -> {
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("🍽️ Restaurant Universitaire");
+                alert.setHeaderText(nomResto);
+                alert.setContentText("Capacité: " + capaciteResto + " personnes\n" +
+                                    "Horaires: 11h30 - 14h30 et 18h30 - 21h00\n" +
+                                    "Type: Restauration universitaire\n" +
+                                    "Service: Self-service");
+                alert.showAndWait();
+            });
+            
+            rectangles.add(restoRect);
+            pane.getChildren().addAll(restoRect, iconText);
+        }
+        
+        rectanglesRestaurantsParBatiment.put("Restaurants", rectangles);
+    }
+    
+    private void ajouterBibliotheque(Pane pane, int[] pos) {
+        bibliothequeIcon = new Rectangle(pos[0] + 50, pos[1] + 30, 80, 40);
+        bibliothequeIcon.setArcWidth(10);
+        bibliothequeIcon.setArcHeight(10);
+        bibliothequeIcon.setFill(Color.rgb(241, 196, 15));
+        bibliothequeIcon.setStroke(Color.WHITE);
+        bibliothequeIcon.setStrokeWidth(1.5);
+        
+        bibliothequeText = new Text(pos[0] + 75, pos[1] + 55, "📚");
+        bibliothequeText.setFont(Font.font("System", 20));
+        bibliothequeText.setFill(Color.WHITE);
+        
+        Tooltip tooltip = new Tooltip("Bibliothèque Universitaire\n📖 Horaires: 08h00 - 20h00\n💻 Salle multimédia\n📚 Salle de lecture");
+        Tooltip.install(bibliothequeIcon, tooltip);
+        Tooltip.install(bibliothequeText, tooltip);
+        
+        bibliothequeIcon.setOnMouseClicked(event -> {
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("📚 Bibliothèque Universitaire");
+            alert.setHeaderText("Bibliothèque");
+            alert.setContentText("Horaires: 08h00 - 20h00\n" +
+                                "Salle de lecture: 100 places\n" +
+                                "Salle multimédia: 50 places\n" +
+                                "Wi-Fi gratuit\n" +
+                                "Accès aux bases de données");
+            alert.showAndWait();
+        });
+        
+        bibliothequeText.setOnMouseClicked(event -> {
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("📚 Bibliothèque Universitaire");
+            alert.setHeaderText("Bibliothèque");
+            alert.setContentText("Horaires: 08h00 - 20h00\n" +
+                                "Salle de lecture: 100 places\n" +
+                                "Salle multimédia: 50 places\n" +
+                                "Wi-Fi gratuit\n" +
+                                "Accès aux bases de données");
+            alert.showAndWait();
+        });
+        
+        pane.getChildren().addAll(bibliothequeIcon, bibliothequeText);
+    }
+    
     private VBox creerPanneauInformation() {
         VBox box = new VBox(15);
         box.setPadding(new Insets(20));
@@ -357,7 +530,7 @@ public class VueCarte {
         nomBatimentLabel = new Label("Aucun bâtiment sélectionné");
         nomBatimentLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #3498db;");
         
-        Label sallesLabel = new Label("Salles disponibles:");
+        Label sallesLabel = new Label("Salles / Espaces disponibles:");
         sallesLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #34495e;");
         
         listeSalles = new ListView<>();
@@ -391,7 +564,7 @@ public class VueCarte {
         statsGrid.setVgap(8);
         statsGrid.setPadding(new Insets(5));
         
-        statsGrid.add(new Label("Total salles:"), 0, 0);
+        statsGrid.add(new Label("Total salles/espaces:"), 0, 0);
         Label totalSallesVal = new Label("0");
         totalSallesVal.setStyle("-fx-font-weight: bold; -fx-text-fill: #2980b9;");
         statsGrid.add(totalSallesVal, 1, 0);
@@ -401,12 +574,12 @@ public class VueCarte {
         capaciteTotalVal.setStyle("-fx-font-weight: bold; -fx-text-fill: #27ae60;");
         statsGrid.add(capaciteTotalVal, 1, 1);
         
-        statsGrid.add(new Label("Salles libres:"), 0, 2);
+        statsGrid.add(new Label("Libres/Ouverts:"), 0, 2);
         Label libresVal = new Label("0");
         libresVal.setStyle("-fx-font-weight: bold; -fx-text-fill: #2ecc71;");
         statsGrid.add(libresVal, 1, 2);
         
-        statsGrid.add(new Label("Salles occupées:"), 0, 3);
+        statsGrid.add(new Label("Occupés/Fermés:"), 0, 3);
         Label occupeesVal = new Label("0");
         occupeesVal.setStyle("-fx-font-weight: bold; -fx-text-fill: #e74c3c;");
         statsGrid.add(occupeesVal, 1, 3);
@@ -434,20 +607,58 @@ public class VueCarte {
             LocalTime maintenant = LocalTime.now();
             
             if (salles.isEmpty()) {
-                listeSalles.getItems().add("Ce bâtiment ne contient pas de salles de cours");
+                listeSalles.getItems().add("Ce bâtiment ne contient pas de salles");
             } else {
                 int libres = 0;
                 int occupees = 0;
                 int capaciteTotale = 0;
                 
                 for (Salle salle : salles) {
-                    boolean estOccupee = estSalleOccupee(salle.getId(), aujourdHui, maintenant);
-                    String statut = estOccupee ? "🔴 Occupée" : "🟢 Libre";
-                    if (estOccupee) occupees++; else libres++;
+                    boolean estOccupee = false;
+                    String statut = "";
+                    String details = "";
+                    
+                    // Cas particulier pour les restaurants
+                    if ("RESTAURANT".equals(salle.getType())) {
+                        int heure = maintenant.getHour();
+                        int minute = maintenant.getMinute();
+                        boolean estOuvert = false;
+                        
+                        // Petit déjeuner : 06h00 - 10h00
+                        if (heure >= 6 && heure < 10) {
+                            estOuvert = true;
+                        }
+                        // Déjeuner : 12h00 - 14h00
+                        else if (heure >= 12 && heure < 14) {
+                            estOuvert = true;
+                        }
+                        // Dîner : 19h00 - 21h00
+                        else if (heure >= 19 && heure < 21) {
+                            estOuvert = true;
+                        }
+                        
+                        statut = estOuvert ? "🟢 Ouvert" : "🔴 Fermé";
+                        if (estOuvert) libres++; else occupees++;
+                        details = "\n🍳 Petit-déj: 06h-10h\n🍽️ Déjeuner: 12h-14h\n🍷 Dîner: 19h-21h";
+                    }
+                    // Cas particulier pour la bibliothèque
+                    else if ("BIBLIOTHEQUE".equals(salle.getType())) {
+                        int heure = maintenant.getHour();
+                        boolean estOuverte = (heure >= 8 && heure <= 20);
+                        statut = estOuverte ? "🟢 Ouverte" : "🔴 Fermée";
+                        if (estOuverte) libres++; else occupees++;
+                        details = "\n📖 Horaires: 08h00-20h00\n   Salle lecture: 100 places\n   Salle multimédia: 50 places";
+                    }
+                    else {
+                        estOccupee = estSalleOccupee(salle.getId(), aujourdHui, maintenant);
+                        statut = estOccupee ? "🔴 Occupée" : "🟢 Libre";
+                        if (estOccupee) occupees++; else libres++;
+                    }
+                    
                     capaciteTotale += salle.getCapacite();
                     
                     String info = salle.getNumeroSalle() + " - Cap: " + salle.getCapacite() + 
-                                 " - " + salle.getType() + " - " + statut;
+                                 " places - " + salle.getType() + " - " + statut + details;
                     listeSalles.getItems().add(info);
                 }
                 
@@ -475,12 +686,21 @@ public class VueCarte {
             "   • Bâtiment B (8 salles) - Vert\n" +
             "   • Bâtiment C (5 salles) - Violet\n" +
             "   • Amphithéâtres (2 salles) - Rouge\n" +
-            "   • Bibliothèque (pas de salles) - Jaune\n" +
-            "   • Restaurants (pas de salles) - Orange\n\n" +
-            "🟢🔴 SALLES:\n" +
-            "   • 🟢 Vert: Salle libre\n" +
-            "   • 🔴 Rouge: Salle occupée\n\n" +
-            "⏱️ Mise à jour: Toutes les 30 secondes";
+            "   • Bibliothèque (2 espaces) - Jaune\n" +
+            "   • Restaurants (2 restaurants) - Orange\n\n" +
+            "🟢🔴 ÉTABLISSEMENTS:\n" +
+            "   • 🟢 Vert: Salle libre / Établissement ouvert\n" +
+            "   • 🔴 Rouge: Salle occupée / Établissement fermé\n\n" +
+            "🍽️ RESTAURANTS:\n" +
+            "   • Resto U 1: 200 places\n" +
+            "   • Resto U 2: 150 places\n" +
+            "   • Horaires: 11h30-14h30 et 18h30-21h00\n\n" +
+            "📚 BIBLIOTHÈQUE:\n" +
+            "   • Salle de lecture: 100 places\n" +
+            "   • Salle multimédia: 50 places\n" +
+            "   • Horaires: 08h00-20h00\n\n" +
+            "⏱️ Mise à jour: Toutes les 30 secondes\n" +
+            "📊 Statistiques en temps réel dans le panneau de droite";
         
         alert.setContentText(legende);
         alert.showAndWait();
