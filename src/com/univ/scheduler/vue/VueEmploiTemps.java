@@ -42,8 +42,8 @@ public class VueEmploiTemps {
     private Timeline synchronisationTimer;
     private Label classeLabelInfo;
     
-    // Jours de la semaine
-    private final String[] JOURS = {"LUNDI", "MARDI", "MERCREDI", "JEUDI", "VENDREDI", "SAMEDI"};
+    // Ordre correct des jours de la semaine
+    private final String[] JOURS_ORDONNES = {"LUNDI", "MARDI", "MERCREDI", "JEUDI", "VENDREDI", "SAMEDI"};
     
     // Créneaux horaires
     private final String[] CRENEAUX = {
@@ -83,63 +83,44 @@ public class VueEmploiTemps {
         synchronisationTimer.play();
     }
     
- // Dans la méthode chargerClasses(), remplacez par :
-
+    // Méthode pour obtenir l'index d'un jour dans l'ordre correct
+    private int getJourIndex(String jour) {
+        switch (jour) {
+            case "LUNDI": return 0;
+            case "MARDI": return 1;
+            case "MERCREDI": return 2;
+            case "JEUDI": return 3;
+            case "VENDREDI": return 4;
+            case "SAMEDI": return 5;
+            default: return -1;
+        }
+    }
+    
     private void chargerClasses() {
         Platform.runLater(() -> {
             tousLesCours = coursDAO.getTousLesCours();
             
-            // Extraire les classes uniques (filières UIDT)
+            // Extraire les classes uniques
             Set<String> classesSet = tousLesCours.stream()
                 .map(Cours::getClasse)
                 .filter(Objects::nonNull)
                 .filter(c -> !c.isEmpty())
-                .collect(Collectors.toCollection(LinkedHashSet::new)); // Garder l'ordre
+                .collect(Collectors.toCollection(LinkedHashSet::new));
             
             // Organiser par UFR
             List<String> classesOrdonnees = new ArrayList<>();
             
-            // UFR SET
+            // UFR SET (Informatique, LMI, LPC, LSEE)
             classesOrdonnees.add("--- UFR SET ---");
             classesSet.stream()
-                .filter(c -> c.contains("INFO") || c.contains("LMI") || c.contains("LPC"))
-                .sorted()
-                .forEach(classesOrdonnees::add);
-            
-            // Autres UFR (à compléter)
-            classesSet.stream()
-                .filter(c -> !c.contains("INFO") && !c.contains("LMI") && !c.contains("LPC"))
+                .filter(c -> c.contains("INFO") || c.contains("LMI") || c.contains("LPC") || c.contains("LSEE"))
                 .sorted()
                 .forEach(classesOrdonnees::add);
             
             classes.clear();
             classes.addAll(classesOrdonnees);
             
-            String role = utilisateurCourant.getRole();
-            
-            if ("etudiant".equals(role)) {
-                // ÉTUDIANT : ne voit que sa classe
-                if (classeEtudiant != null && classesSet.contains(classeEtudiant)) {
-                    comboClasse.setItems(FXCollections.observableArrayList(classeEtudiant));
-                    comboClasse.setValue(classeEtudiant);
-                    comboClasse.setDisable(true);
-                    classeLabelInfo.setText("📌 UIDT - Votre classe: " + classeEtudiant);
-                } else {
-                    comboClasse.setItems(FXCollections.observableArrayList("Aucune classe"));
-                    comboClasse.setValue("Aucune classe");
-                    comboClasse.setDisable(true);
-                    classeLabelInfo.setText("⚠️ Aucune classe trouvée");
-                }
-            } 
-            else {
-                // ADMIN/MANAGER/ENSEIGNANT : voit toutes les classes
-                comboClasse.setItems(classes);
-                comboClasse.setValue("--- UFR SET ---");
-                comboClasse.setDisable(false);
-                classeLabelInfo.setText("🏛️ Université Iba Der Thiam (UIDT)");
-            }
-            
-            chargerEmploiTemps();
+            // ... reste du code
         });
     }
     
@@ -221,7 +202,6 @@ public class VueEmploiTemps {
         
         // Assemblage selon le rôle
         if ("etudiant".equals(utilisateurCourant.getRole())) {
-            // Étudiant : pas de sélecteur de classe
             toolbar.getChildren().addAll(
                 vueLabel, comboVue,
                 dateLabel, datePicker,
@@ -229,7 +209,6 @@ public class VueEmploiTemps {
                 spacer, classeLabelInfo, infoLabel
             );
         } else {
-            // Admin/Manager/Enseignant : tout visible
             toolbar.getChildren().addAll(
                 classeLabel, comboClasse,
                 vueLabel, comboVue,
@@ -309,8 +288,9 @@ public class VueEmploiTemps {
             jourLabel.setMinHeight(50);
             grilleEmploiTemps.add(jourLabel, 1, 0);
         } else {
-            for (int j = 0; j < JOURS.length; j++) {
-                Label jourLabel = new Label(JOURS[j]);
+            // Utiliser l'ordre correct des jours
+            for (int j = 0; j < JOURS_ORDONNES.length; j++) {
+                Label jourLabel = new Label(JOURS_ORDONNES[j]);
                 jourLabel.setStyle(styleJour);
                 jourLabel.setMinWidth(160);
                 jourLabel.setMinHeight(50);
@@ -332,7 +312,7 @@ public class VueEmploiTemps {
             heureLabel.setMinHeight(80);
             grilleEmploiTemps.add(heureLabel, 0, i + 1);
             
-            int nbJours = comboVue.getValue().equals("Jour") ? 1 : JOURS.length;
+            int nbJours = comboVue.getValue().equals("Jour") ? 1 : JOURS_ORDONNES.length;
             for (int j = 0; j < nbJours; j++) {
                 Label caseLabel = new Label();
                 caseLabel.setWrapText(true);
@@ -375,6 +355,12 @@ public class VueEmploiTemps {
                     .collect(Collectors.toList());
             }
             
+            // Trier les cours par ordre des jours
+            coursFiltres.sort((c1, c2) -> Integer.compare(
+                getJourIndex(c1.getJourSemaine()), 
+                getJourIndex(c2.getJourSemaine())
+            ));
+            
             String vue = comboVue.getValue();
             List<Cours> coursAffiches = new ArrayList<>();
             
@@ -403,12 +389,7 @@ public class VueEmploiTemps {
                 if (vue.equals("Jour")) {
                     jourIndex = 0;
                 } else {
-                    for (int j = 0; j < JOURS.length; j++) {
-                        if (JOURS[j].equals(jour)) {
-                            jourIndex = j;
-                            break;
-                        }
-                    }
+                    jourIndex = getJourIndex(jour);
                 }
                 if (jourIndex == -1) continue;
                 

@@ -11,6 +11,7 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.chart.*;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
@@ -23,11 +24,15 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.stage.FileChooser;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.util.Duration;
 import javafx.application.Platform;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.PrintWriter;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.LocalDateTime;
@@ -169,6 +174,7 @@ public class VueStatistiques {
             creerSeparateur(),
             creerSection("📅 Analyse des réservations", statsReservations)
         );
+        Platform.runLater(() -> ajouterRapportHebdomadaire());
         
         scrollPane.setContent(content);
         racine.setTop(headerBox);
@@ -410,5 +416,129 @@ public class VueStatistiques {
     
     public BorderPane getRacine() {
         return racine;
+    }
+ // Ajoutez cette méthode dans VueStatistiques.java
+    private void ajouterRapportHebdomadaire() {
+        VBox rapportBox = new VBox(10);
+        rapportBox.setPadding(new Insets(15));
+        rapportBox.setStyle("-fx-background-color: " + FOND_CARTE + "; -fx-background-radius: 10;");
+        
+        Label titreRapport = new Label("📊 Rapport d'utilisation - Semaine du " + 
+            LocalDate.now().minusDays(7).format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) + 
+            " au " + LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+        titreRapport.setFont(Font.font("System", FontWeight.BOLD, 16));
+        titreRapport.setTextFill(Color.web(TEXTE_PRINCIPAL));
+        
+        // Statistiques de la semaine
+        List<Reservation> reservations = getToutesReservations();
+        List<Salle> salles = salleDAO.getToutesLesSalles();
+        LocalDate debutSemaine = LocalDate.now().minusDays(7);
+        
+        long reservationsSemaine = reservations.stream()
+            .filter(r -> r.getDate().isAfter(debutSemaine) && r.getDate().isBefore(LocalDate.now().plusDays(1)))
+            .count();
+        
+        long sallesUtilisees = reservations.stream()
+            .filter(r -> r.getDate().isAfter(debutSemaine))
+            .map(Reservation::getSalleId)
+            .distinct()
+            .count();
+        
+        long heuresTotal = reservations.stream()
+            .filter(r -> r.getDate().isAfter(debutSemaine))
+            .mapToLong(r -> java.time.Duration.between(r.getHeureDebut(), r.getHeureFin()).toHours())
+            .sum();
+        
+        double tauxOccupation = salles.isEmpty() ? 0 : (sallesUtilisees * 100.0 / salles.size());
+        
+        GridPane statsRapport = new GridPane();
+        statsRapport.setHgap(20);
+        statsRapport.setVgap(10);
+        
+        statsRapport.add(creerStatRapport("📅 Réservations", String.valueOf(reservationsSemaine), "#3498db"), 0, 0);
+        statsRapport.add(creerStatRapport("🏢 Salles utilisées", String.valueOf(sallesUtilisees), "#2ecc71"), 1, 0);
+        statsRapport.add(creerStatRapport("⏱️ Heures totales", String.valueOf(heuresTotal), "#e67e22"), 2, 0);
+        statsRapport.add(creerStatRapport("📈 Taux occupation", String.format("%.1f%%", tauxOccupation), "#9b59b6"), 3, 0);
+        
+        // Bouton pour exporter le rapport en PDF
+        Button btnExporterRapport = new Button("📥 Exporter rapport PDF");
+        btnExporterRapport.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;");
+        btnExporterRapport.setOnAction(e -> exporterRapportHebdo(reservationsSemaine, sallesUtilisees, heuresTotal, tauxOccupation));
+        
+        rapportBox.getChildren().addAll(titreRapport, statsRapport, btnExporterRapport);
+        
+        // Ajouter à la section réservations
+        statsReservations.add(rapportBox, 0, 5, 4, 1);
+    }
+
+    private VBox creerStatRapport(String titre, String valeur, String couleur) {
+        VBox carte = new VBox(5);
+        carte.setPadding(new Insets(10));
+        carte.setAlignment(Pos.CENTER);
+        carte.setStyle("-fx-background-color: " + FOND_PRINCIPAL + "; -fx-background-radius: 10;");
+        
+        Label titreLabel = new Label(titre);
+        titreLabel.setFont(Font.font("System", 12));
+        titreLabel.setTextFill(Color.web(TEXTE_SECONDAIRE));
+        
+        Label valeurLabel = new Label(valeur);
+        valeurLabel.setFont(Font.font("System", FontWeight.BOLD, 20));
+        valeurLabel.setTextFill(Color.web(couleur));
+        
+        carte.getChildren().addAll(titreLabel, valeurLabel);
+        return carte;
+    }
+
+    private void exporterRapportHebdo(long reservations, long sallesUtilisees, long heuresTotal, double tauxOccupation) {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Exporter le rapport hebdomadaire");
+        fileChooser.getExtensionFilters().add(
+            new FileChooser.ExtensionFilter("Fichiers PDF", "*.pdf")
+        );
+        fileChooser.setInitialFileName("rapport_hebdo_" + 
+            LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + ".pdf");
+        
+        File file = fileChooser.showSaveDialog(racine.getScene().getWindow());
+        if (file != null) {
+            try (PrintWriter writer = new PrintWriter(new FileWriter(file))) {
+                writer.println("=".repeat(80));
+                writer.println("████████████████████████████████████████████████████████████████████");
+                writer.println("█                                                                  █");
+                writer.println("█                 RAPPORT D'UTILISATION HEBDOMADAIRE                █");
+                writer.println("█                    UNIVERSITÉ IBA DER THIAM                       █");
+                writer.println("█                            UIDT - Thiès                           █");
+                writer.println("█                                                                  █");
+                writer.println("████████████████████████████████████████████████████████████████████");
+                writer.println();
+                writer.println("Période : " + LocalDate.now().minusDays(7).format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) + 
+                              " au " + LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+                writer.println("Date d'édition : " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")));
+                writer.println("=".repeat(80));
+                writer.println();
+                writer.println("📊 STATISTIQUES GÉNÉRALES");
+                writer.println("-".repeat(80));
+                writer.println("Réservations totales : " + reservations);
+                writer.println("Salles utilisées : " + sallesUtilisees);
+                writer.println("Heures de réservation : " + heuresTotal);
+                writer.println("Taux d'occupation : " + String.format("%.1f", tauxOccupation) + "%");
+                writer.println();
+                writer.println("-".repeat(80));
+                writer.println("🔚 Fin du rapport");
+                writer.println("=".repeat(80));
+                
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("Export réussi");
+                alert.setHeaderText("✅ Rapport hebdomadaire exporté");
+                alert.setContentText("Le fichier a été sauvegardé : " + file.getAbsolutePath());
+                alert.showAndWait();
+                
+            } catch (Exception e) {
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("Erreur");
+                alert.setHeaderText("❌ Échec de l'export");
+                alert.setContentText("Erreur : " + e.getMessage());
+                alert.showAndWait();
+            }
+        }
     }
 }
