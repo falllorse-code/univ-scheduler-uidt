@@ -331,4 +331,40 @@ public class VueTableauBord {
     public BorderPane getRacine() {
         return racine;
     }
+    private VBox creerGraphiqueBatiments(Map<String, List<Salle>> sallesParBatiment) {
+        VBox box = new VBox(10);
+        box.setStyle("-fx-background-color: " + FOND_CARTE + "; -fx-padding: 15; -fx-background-radius: 10;");
+        box.setPrefWidth(400);
+        
+        Label titre = new Label("Répartition par bâtiment");
+        titre.setFont(Font.font("System", FontWeight.BOLD, 16));
+        titre.setTextFill(Color.web(TEXTE_PRINCIPAL));
+        
+        ObservableList<PieChart.Data> donnees = FXCollections.observableArrayList();
+        
+        for (Map.Entry<String, List<Salle>> entry : sallesParBatiment.entrySet()) {
+            String batiment = entry.getKey();
+            int nbSalles = entry.getValue().size();
+            if (nbSalles > 0) {
+                donnees.add(new PieChart.Data(batiment + " (" + nbSalles + ")", nbSalles));
+            }
+        }
+        
+        PieChart pieChart = new PieChart(donnees);
+        pieChart.setPrefWidth(350);
+        pieChart.setPrefHeight(300);
+        pieChart.setLabelsVisible(true);
+        pieChart.setLegendVisible(false);
+        pieChart.setStyle("-fx-background-color: transparent;");
+        
+        // ✅ FORCER LE TEXTE EN BLANC
+        Platform.runLater(() -> {
+            pieChart.lookupAll(".chart-pie-label").forEach(node -> {
+                node.setStyle("-fx-fill: white; -fx-font-size: 12px; -fx-font-weight: bold;");
+            });
+        });
+        
+        box.getChildren().addAll(titre, pieChart);
+        return box;
+    }
 }

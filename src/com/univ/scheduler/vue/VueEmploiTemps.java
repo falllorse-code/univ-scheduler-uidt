@@ -98,29 +98,69 @@ public class VueEmploiTemps {
     
     private void chargerClasses() {
         Platform.runLater(() -> {
+            // Récupérer tous les cours
             tousLesCours = coursDAO.getTousLesCours();
             
+            if (tousLesCours == null || tousLesCours.isEmpty()) {
+                System.err.println("⚠️ Aucun cours trouvé dans la base de données !");
+                comboClasse.setItems(FXCollections.observableArrayList("Aucune classe"));
+                comboClasse.setValue("Aucune classe");
+                return;
+            }
+            
             // Extraire les classes uniques
-            Set<String> classesSet = tousLesCours.stream()
-                .map(Cours::getClasse)
-                .filter(Objects::nonNull)
-                .filter(c -> !c.isEmpty())
-                .collect(Collectors.toCollection(LinkedHashSet::new));
+            Set<String> classesSet = new TreeSet<>(); // TreeSet pour tri automatique
+            for (Cours c : tousLesCours) {
+                if (c.getClasse() != null && !c.getClasse().isEmpty()) {
+                    classesSet.add(c.getClasse());
+                }
+            }
+            
+            System.out.println("📚 Classes trouvées : " + classesSet);
             
             // Organiser par UFR
             List<String> classesOrdonnees = new ArrayList<>();
             
-            // UFR SET (Informatique, LMI, LPC, LSEE)
+            // UFR SET
             classesOrdonnees.add("--- UFR SET ---");
-            classesSet.stream()
-                .filter(c -> c.contains("INFO") || c.contains("LMI") || c.contains("LPC") || c.contains("LSEE"))
-                .sorted()
-                .forEach(classesOrdonnees::add);
+            for (String classe : classesSet) {
+                if (classe.contains("INFO") || classe.contains("LMI") || classe.contains("LPC") || classe.contains("LSEE")) {
+                    classesOrdonnees.add(classe);
+                }
+            }
             
             classes.clear();
             classes.addAll(classesOrdonnees);
             
-            // ... reste du code
+            String role = utilisateurCourant.getRole();
+            
+            if ("etudiant".equals(role)) {
+                // Étudiant : ne voit que sa classe
+                if (classeEtudiant != null && classesSet.contains(classeEtudiant)) {
+                    comboClasse.setItems(FXCollections.observableArrayList(classeEtudiant));
+                    comboClasse.setValue(classeEtudiant);
+                    comboClasse.setDisable(true);
+                    classeLabelInfo.setText("📌 Votre classe: " + classeEtudiant);
+                } else {
+                    comboClasse.setItems(FXCollections.observableArrayList("Aucune classe"));
+                    comboClasse.setValue("Aucune classe");
+                    comboClasse.setDisable(true);
+                    classeLabelInfo.setText("⚠️ Aucune classe trouvée");
+                }
+            } else {
+                // Admin/Manager/Enseignant : voit toutes les classes
+                if (classesOrdonnees.isEmpty()) {
+                    comboClasse.setItems(FXCollections.observableArrayList("Aucune classe"));
+                    comboClasse.setValue("Aucune classe");
+                } else {
+                    comboClasse.setItems(FXCollections.observableArrayList(classesOrdonnees));
+                    comboClasse.setValue(classesOrdonnees.get(0));
+                }
+                comboClasse.setDisable(false);
+                classeLabelInfo.setText("🏛️ Université Iba Der Thiam (UIDT)");
+            }
+            
+            chargerEmploiTemps();
         });
     }
     
