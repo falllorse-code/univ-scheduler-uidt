@@ -42,19 +42,15 @@ public class VueEmploiTemps {
     private Timeline synchronisationTimer;
     private Label classeLabelInfo;
     
-    // Ordre correct des jours de la semaine
     private final String[] JOURS_ORDONNES = {"LUNDI", "MARDI", "MERCREDI", "JEUDI", "VENDREDI", "SAMEDI"};
+    private final String[] CRENEAUX = {"08h-10h", "10h-12h", "12h-14h", "14h-16h", "16h-18h", "18h-20h"};
     
-    // Créneaux horaires
-    private final String[] CRENEAUX = {
-        "08h-10h", "10h-12h", "12h-14h", "14h-16h", "16h-18h", "18h-20h"
-    };
-    
-    // Données
     private ObservableList<String> classes;
     private List<Cours> tousLesCours;
     private LocalDate dateSelectionnee;
     private String classeEtudiant;
+    private boolean estEnseignant;
+    private int enseignantId;
     
     public VueEmploiTemps(Utilisateur utilisateur, Stage stage) {
         this.utilisateurCourant = utilisateur;
@@ -65,9 +61,17 @@ public class VueEmploiTemps {
         this.tousLesCours = new ArrayList<>();
         this.dateSelectionnee = LocalDate.now();
         
-        // Déterminer la classe de l'étudiant si c'est un étudiant
+        // Déterminer le rôle
+        this.estEnseignant = "enseignant".equals(utilisateurCourant.getRole());
+        if (estEnseignant) {
+            this.enseignantId = utilisateurCourant.getId();
+        }
+        
+        // Déterminer la classe de l'étudiant
         if ("etudiant".equals(utilisateurCourant.getRole())) {
             this.classeEtudiant = utilisateurCourant.getClasse();
+            System.out.println("=== ÉTUDIANT CONNECTÉ ===");
+            System.out.println("Classe: " + classeEtudiant);
         }
         
         creerVue();
@@ -83,51 +87,51 @@ public class VueEmploiTemps {
         synchronisationTimer.play();
     }
     
-    // Méthode pour obtenir l'index d'un jour dans l'ordre correct
-    private int getJourIndex(String jour) {
-        switch (jour) {
-            case "LUNDI": return 0;
-            case "MARDI": return 1;
-            case "MERCREDI": return 2;
-            case "JEUDI": return 3;
-            case "VENDREDI": return 4;
-            case "SAMEDI": return 5;
-            default: return -1;
-        }
+    private void chargerCours() {
+        Platform.runLater(() -> {
+            tousLesCours = coursDAO.getTousLesCours();
+            
+            System.out.println("=== CHARGEMENT DES COURS ===");
+            System.out.println("Total cours dans BD: " + tousLesCours.size());
+            
+            // Si c'est un enseignant, filtrer ses propres cours
+            if (estEnseignant) {
+                tousLesCours = tousLesCours.stream()
+                    .filter(c -> c.getEnseignantId() == enseignantId)
+                    .collect(Collectors.toList());
+                System.out.println("Cours pour enseignant: " + tousLesCours.size());
+            }
+            
+            // Si c'est un étudiant, on ne filtre pas ici (on filtre dans chargerEmploiTemps)
+            
+            chargerEmploiTemps();
+        });
     }
     
     private void chargerClasses() {
         Platform.runLater(() -> {
-            // Récupérer tous les cours
-            tousLesCours = coursDAO.getTousLesCours();
+            List<Cours> coursSource;
             
-            if (tousLesCours == null || tousLesCours.isEmpty()) {
-                System.err.println("⚠️ Aucun cours trouvé dans la base de données !");
-                comboClasse.setItems(FXCollections.observableArrayList("Aucune classe"));
-                comboClasse.setValue("Aucune classe");
-                return;
+            if (estEnseignant) {
+                coursSource = tousLesCours;
+            } else {
+                coursSource = coursDAO.getTousLesCours();
             }
             
             // Extraire les classes uniques
-            Set<String> classesSet = new TreeSet<>(); // TreeSet pour tri automatique
-            for (Cours c : tousLesCours) {
-                if (c.getClasse() != null && !c.getClasse().isEmpty()) {
-                    classesSet.add(c.getClasse());
-                }
-            }
-            
-            System.out.println("📚 Classes trouvées : " + classesSet);
+            Set<String> classesSet = coursSource.stream()
+                .map(Cours::getClasse)
+                .filter(Objects::nonNull)
+                .filter(c -> !c.isEmpty())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
             
             // Organiser par UFR
             List<String> classesOrdonnees = new ArrayList<>();
-            
-            // UFR SET
             classesOrdonnees.add("--- UFR SET ---");
-            for (String classe : classesSet) {
-                if (classe.contains("INFO") || classe.contains("LMI") || classe.contains("LPC") || classe.contains("LSEE")) {
-                    classesOrdonnees.add(classe);
-                }
-            }
+            classesSet.stream()
+                .filter(c -> c.contains("INFO") || c.contains("LMI") || c.contains("LPC") || c.contains("LSEE"))
+                .sorted()
+                .forEach(classesOrdonnees::add);
             
             classes.clear();
             classes.addAll(classesOrdonnees);
@@ -135,8 +139,8 @@ public class VueEmploiTemps {
             String role = utilisateurCourant.getRole();
             
             if ("etudiant".equals(role)) {
-                // Étudiant : ne voit que sa classe
-                if (classeEtudiant != null && classesSet.contains(classeEtudiant)) {
+                // ÉTUDIANT : ne voit que sa classe
+                if (classeEtudiant != null && !classeEtudiant.isEmpty()) {
                     comboClasse.setItems(FXCollections.observableArrayList(classeEtudiant));
                     comboClasse.setValue(classeEtudiant);
                     comboClasse.setDisable(true);
@@ -147,8 +151,14 @@ public class VueEmploiTemps {
                     comboClasse.setDisable(true);
                     classeLabelInfo.setText("⚠️ Aucune classe trouvée");
                 }
+            } else if (estEnseignant) {
+                // ENSEIGNANT : voit "Mes cours"
+                comboClasse.setItems(FXCollections.observableArrayList("Mes cours"));
+                comboClasse.setValue("Mes cours");
+                comboClasse.setDisable(true);
+                classeLabelInfo.setText("👨‍🏫 Vos cours (" + tousLesCours.size() + " cours)");
             } else {
-                // Admin/Manager/Enseignant : voit toutes les classes
+                // ADMIN/MANAGER : voit toutes les classes
                 if (classesOrdonnees.isEmpty()) {
                     comboClasse.setItems(FXCollections.observableArrayList("Aucune classe"));
                     comboClasse.setValue("Aucune classe");
@@ -164,11 +174,6 @@ public class VueEmploiTemps {
         });
     }
     
-    private void chargerCours() {
-        tousLesCours = coursDAO.getTousLesCours();
-        chargerEmploiTemps();
-    }
-    
     private void creerVue() {
         racine = new BorderPane();
         racine.setPadding(new Insets(20));
@@ -181,6 +186,8 @@ public class VueEmploiTemps {
         String titre = "📅 Emploi du temps";
         if ("etudiant".equals(utilisateurCourant.getRole()) && classeEtudiant != null) {
             titre += " - " + classeEtudiant;
+        } else if (estEnseignant) {
+            titre += " - Mes cours";
         }
         
         Label titreLabel = new Label(titre);
@@ -295,13 +302,10 @@ public class VueEmploiTemps {
     private HBox creerLegendeItem(String texte, String couleur) {
         HBox box = new HBox(5);
         box.setAlignment(Pos.CENTER_LEFT);
-        
         Label colorLabel = new Label("■");
         colorLabel.setStyle("-fx-text-fill: " + couleur + "; -fx-font-size: 16px; -fx-font-weight: bold;");
-        
         Label textLabel = new Label(texte);
         textLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #34495e;");
-        
         box.getChildren().addAll(colorLabel, textLabel);
         return box;
     }
@@ -328,7 +332,6 @@ public class VueEmploiTemps {
             jourLabel.setMinHeight(50);
             grilleEmploiTemps.add(jourLabel, 1, 0);
         } else {
-            // Utiliser l'ordre correct des jours
             for (int j = 0; j < JOURS_ORDONNES.length; j++) {
                 Label jourLabel = new Label(JOURS_ORDONNES[j]);
                 jourLabel.setStyle(styleJour);
@@ -377,7 +380,13 @@ public class VueEmploiTemps {
             String classeSelectionnee;
             
             if ("etudiant".equals(utilisateurCourant.getRole())) {
-                classeSelectionnee = classeEtudiant;
+                classeSelectionnee = utilisateurCourant.getClasse();
+                
+                // DEBUG
+                System.out.println("=== CHARGEMENT EMPLOI DU TEMPS ÉTUDIANT ===");
+                System.out.println("Classe étudiante: " + classeSelectionnee);
+            } else if (estEnseignant) {
+                classeSelectionnee = "Mes cours";
             } else {
                 classeSelectionnee = comboClasse.getValue();
             }
@@ -387,15 +396,30 @@ public class VueEmploiTemps {
             construireGrille();
             
             List<Cours> coursFiltres;
-            if (classeSelectionnee.equals("Toutes les classes")) {
+            
+            if ("etudiant".equals(utilisateurCourant.getRole())) {
+                // ÉTUDIANT : filtrer par sa classe
+                coursFiltres = tousLesCours.stream()
+                    .filter(c -> classeSelectionnee != null && classeSelectionnee.equals(c.getClasse()))
+                    .collect(Collectors.toList());
+                
+                System.out.println("Cours trouvés pour " + classeSelectionnee + ": " + coursFiltres.size());
+                
+            } else if (estEnseignant) {
+                // ENSEIGNANT : déjà filtré dans chargerCours()
                 coursFiltres = tousLesCours;
             } else {
-                coursFiltres = tousLesCours.stream()
-                    .filter(c -> classeSelectionnee.equals(c.getClasse()))
-                    .collect(Collectors.toList());
+                // ADMIN/MANAGER
+                if (classeSelectionnee.equals("Toutes les classes") || classeSelectionnee.startsWith("---")) {
+                    coursFiltres = tousLesCours;
+                } else {
+                    coursFiltres = tousLesCours.stream()
+                        .filter(c -> classeSelectionnee.equals(c.getClasse()))
+                        .collect(Collectors.toList());
+                }
             }
             
-            // Trier les cours par ordre des jours
+            // Trier par jour
             coursFiltres.sort((c1, c2) -> Integer.compare(
                 getJourIndex(c1.getJourSemaine()), 
                 getJourIndex(c2.getJourSemaine())
@@ -425,12 +449,7 @@ public class VueEmploiTemps {
                 String creneau = trouverCreneau(debut, fin);
                 if (creneau == null || creneau.equals("12h-14h")) continue;
                 
-                int jourIndex = -1;
-                if (vue.equals("Jour")) {
-                    jourIndex = 0;
-                } else {
-                    jourIndex = getJourIndex(jour);
-                }
+                int jourIndex = vue.equals("Jour") ? 0 : getJourIndex(jour);
                 if (jourIndex == -1) continue;
                 
                 int creneauIndex = -1;
@@ -462,33 +481,40 @@ public class VueEmploiTemps {
                 }
             }
             
-            String role = utilisateurCourant.getRole();
             String message;
-            
-            if ("etudiant".equals(role)) {
-                message = "📚 Votre emploi du temps: " + classeSelectionnee + 
-                         " (" + coursAffiches.size() + " cours)";
+            if ("etudiant".equals(utilisateurCourant.getRole())) {
+                message = "📚 Votre emploi du temps: " + classeSelectionnee + " (" + coursAffiches.size() + " cours)";
+            } else if (estEnseignant) {
+                message = "👨‍🏫 Vos cours (" + coursAffiches.size() + " cours)";
             } else {
-                message = "📚 Affichage: " + classeSelectionnee + 
-                         " (" + coursAffiches.size() + " cours)";
+                message = "📚 Affichage: " + classeSelectionnee + " (" + coursAffiches.size() + " cours)";
             }
             
-            infoLabel.setText(message + " - " + 
-                dateSelectionnee.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+            infoLabel.setText(message + " - " + dateSelectionnee.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
         });
+    }
+    
+    private int getJourIndex(String jour) {
+        switch (jour) {
+            case "LUNDI": return 0;
+            case "MARDI": return 1;
+            case "MERCREDI": return 2;
+            case "JEUDI": return 3;
+            case "VENDREDI": return 4;
+            case "SAMEDI": return 5;
+            default: return -1;
+        }
     }
     
     private String trouverCreneau(LocalTime debut, LocalTime fin) {
         int debutHeure = debut.getHour();
         int finHeure = fin.getHour();
-        
         if (debutHeure >= 8 && finHeure <= 10) return "08h-10h";
         if (debutHeure >= 10 && finHeure <= 12) return "10h-12h";
         if (debutHeure >= 12 && finHeure <= 14) return "12h-14h";
         if (debutHeure >= 14 && finHeure <= 16) return "14h-16h";
         if (debutHeure >= 16 && finHeure <= 18) return "16h-18h";
         if (debutHeure >= 18 && finHeure <= 20) return "18h-20h";
-        
         return null;
     }
     
@@ -504,35 +530,25 @@ public class VueEmploiTemps {
     }
     
     private void exporterPDF() {
-        String classeSelectionnee;
-        
-        if ("etudiant".equals(utilisateurCourant.getRole())) {
-            classeSelectionnee = classeEtudiant;
-        } else {
-            classeSelectionnee = comboClasse.getValue();
-        }
-        
-        List<Cours> coursList;
-        
-        if (classeSelectionnee.equals("Toutes les classes")) {
-            coursList = tousLesCours;
-        } else {
-            coursList = tousLesCours.stream()
-                .filter(c -> classeSelectionnee.equals(c.getClasse()))
-                .collect(Collectors.toList());
-        }
-        
-        if (coursList.isEmpty()) {
+        if (tousLesCours.isEmpty()) {
             Alert alert = new Alert(Alert.AlertType.WARNING);
             alert.setTitle("Attention");
             alert.setHeaderText("Aucun cours à exporter");
-            alert.setContentText("Il n'y a pas de cours pour " + classeSelectionnee);
+            alert.setContentText("Il n'y a pas de cours à exporter.");
             alert.showAndWait();
             return;
         }
         
         ExportPDF export = new ExportPDF(stagePrincipal);
-        export.exporterEmploiTemps(coursList, "Emploi du temps " + classeSelectionnee);
+        String titre;
+        if ("etudiant".equals(utilisateurCourant.getRole())) {
+            titre = "Emploi du temps - " + utilisateurCourant.getClasse();
+        } else if (estEnseignant) {
+            titre = "Mes cours";
+        } else {
+            titre = comboClasse.getValue() != null ? comboClasse.getValue() : "Emploi du temps";
+        }
+        export.exporterEmploiTemps(tousLesCours, titre);
     }
     
     public void arreterSynchronisation() {

@@ -63,7 +63,7 @@ public class VueSalles {
         Platform.runLater(() -> {
             toutesSalles.clear();
             toutesSalles.addAll(salleDAO.getToutesLesSalles());
-            rechercherSalles(); // Re-appliquer les filtres
+            rechercherSalles();
             infoLabel.setText("Dernière mise à jour: " + 
                 LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
         });
@@ -75,7 +75,10 @@ public class VueSalles {
         racine.setStyle("-fx-background-color: #f5f7fa;");
         
         // Titre
-        Label titreLabel = new Label("🏢 Gestion des salles en temps réel");
+        Label titreLabel = new Label("🏢 Gestion des salles");
+        if (!utilisateurCourant.getRole().equals("admin")) {
+            titreLabel.setText("🏢 Consultation des salles");
+        }
         titreLabel.setStyle("-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;");
         
         infoLabel = new Label("Mise à jour toutes les 30 secondes");
@@ -183,11 +186,14 @@ public class VueSalles {
         
         tableSalles.getColumns().addAll(colBatiment, colNom, colCapacite, colType, colVideoproj, colTableau, colClim);
         
-        // Boutons d'action
+        // ============================================
+        // BOUTONS D'ACTION - SELON LE RÔLE
+        // ============================================
         HBox boutonsBox = new HBox(10);
         boutonsBox.setPadding(new Insets(20, 0, 0, 0));
         
-        if (utilisateurCourant.getRole().equals("admin") || utilisateurCourant.getRole().equals("manager")) {
+        // Seul l'ADMIN peut ajouter, modifier et supprimer des salles
+        if (utilisateurCourant.getRole().equals("admin")) {
             Button btnAjouter = new Button("➕ Ajouter une salle");
             btnAjouter.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;");
             btnAjouter.setOnAction(e -> ajouterSalle());
@@ -201,6 +207,11 @@ public class VueSalles {
             btnSupprimer.setOnAction(e -> supprimerSalle());
             
             boutonsBox.getChildren().addAll(btnAjouter, btnModifier, btnSupprimer);
+        } else {
+            // Pour les autres rôles (manager, enseignant, étudiant) : consultation seule
+            Label consultationLabel = new Label("ℹ️ Mode consultation - Vous ne pouvez pas modifier les salles");
+            consultationLabel.setStyle("-fx-text-fill: #7f8c8d; -fx-font-style: italic; -fx-padding: 8 0;");
+            boutonsBox.getChildren().add(consultationLabel);
         }
         
         Button btnExporter = new Button("📥 Exporter PDF");
@@ -269,9 +280,15 @@ public class VueSalles {
     }
     
     // ============================================
-    // CRUD COMPLET - AJOUTER UNE SALLE
+    // CRUD - AJOUTER UNE SALLE (admin uniquement)
     // ============================================
     private void ajouterSalle() {
+        // Vérification supplémentaire de sécurité
+        if (!utilisateurCourant.getRole().equals("admin")) {
+            showAlert("Accès refusé", "Vous n'avez pas les droits pour ajouter une salle.", Alert.AlertType.ERROR);
+            return;
+        }
+        
         Dialog<Salle> dialog = new Dialog<>();
         dialog.setTitle("Ajouter une salle");
         dialog.setHeaderText("🏢 Nouvelle salle");
@@ -285,7 +302,6 @@ public class VueSalles {
         grid.setPadding(new Insets(20));
         grid.setPrefWidth(400);
         
-        // Bâtiment
         Label batimentLabel = new Label("Bâtiment:");
         batimentLabel.setStyle("-fx-font-weight: bold;");
         
@@ -297,45 +313,34 @@ public class VueSalles {
         comboBatimentInput.setValue("Bâtiment A");
         comboBatimentInput.setPrefWidth(250);
         
-        // Numéro de salle
         Label numeroLabel = new Label("Numéro salle:");
         numeroLabel.setStyle("-fx-font-weight: bold;");
-        
         TextField champNumero = new TextField();
         champNumero.setPromptText("Ex: A101, B201, Amphi 1...");
         
-        // Capacité
         Label capaciteLabel = new Label("Capacité:");
         capaciteLabel.setStyle("-fx-font-weight: bold;");
-        
         Spinner<Integer> spinnerCapaciteInput = new Spinner<>(1, 500, 30);
         spinnerCapaciteInput.setEditable(true);
         
-        // Type
         Label typeLabel = new Label("Type:");
         typeLabel.setStyle("-fx-font-weight: bold;");
-        
         ComboBox<String> comboTypeInput = new ComboBox<>();
         comboTypeInput.getItems().addAll("TD", "TP", "AMPHI", "BIBLIOTHEQUE", "RESTAURANT");
         comboTypeInput.setValue("TD");
         comboTypeInput.setPrefWidth(150);
         
-        // Équipements
         Label equipLabel = new Label("Équipements:");
         equipLabel.setStyle("-fx-font-weight: bold;");
-        
         CheckBox checkVideoprojInput = new CheckBox("Vidéoprojecteur");
         CheckBox checkTableauInput = new CheckBox("Tableau blanc");
         CheckBox checkClimInput = new CheckBox("Climatisation");
-        
         VBox equipBox = new VBox(5);
         equipBox.getChildren().addAll(checkVideoprojInput, checkTableauInput, checkClimInput);
         
-        // Message d'erreur
         Label messageLabel = new Label();
         messageLabel.setStyle("-fx-text-fill: #e74c3c;");
         
-        // Disposition
         int row = 0;
         grid.add(batimentLabel, 0, row);
         grid.add(comboBatimentInput, 1, row++);
@@ -353,14 +358,12 @@ public class VueSalles {
         
         dialog.setResultConverter(dialogButton -> {
             if (dialogButton == btnValider) {
-                // Validations
                 if (champNumero.getText().trim().isEmpty()) {
                     messageLabel.setText("❌ Le numéro de salle est obligatoire");
                     return null;
                 }
                 
                 Salle salle = new Salle();
-                // Trouver l'ID du bâtiment
                 int batimentId = getBatimentId(comboBatimentInput.getValue());
                 salle.setBatimentId(batimentId);
                 salle.setNomBatiment(comboBatimentInput.getValue());
@@ -386,9 +389,15 @@ public class VueSalles {
     }
     
     // ============================================
-    // CRUD COMPLET - MODIFIER UNE SALLE
+    // CRUD - MODIFIER UNE SALLE (admin uniquement)
     // ============================================
     private void modifierSalle() {
+        // Vérification supplémentaire de sécurité
+        if (!utilisateurCourant.getRole().equals("admin")) {
+            showAlert("Accès refusé", "Vous n'avez pas les droits pour modifier une salle.", Alert.AlertType.ERROR);
+            return;
+        }
+        
         Salle selection = tableSalles.getSelectionModel().getSelectedItem();
         if (selection == null) {
             showAlert("Attention", "⚠️ Veuillez sélectionner une salle à modifier", Alert.AlertType.WARNING);
@@ -408,7 +417,6 @@ public class VueSalles {
         grid.setPadding(new Insets(20));
         grid.setPrefWidth(400);
         
-        // Bâtiment
         Label batimentLabel = new Label("Bâtiment:");
         batimentLabel.setStyle("-fx-font-weight: bold;");
         
@@ -420,49 +428,36 @@ public class VueSalles {
         comboBatimentInput.setValue(selection.getNomBatiment());
         comboBatimentInput.setPrefWidth(250);
         
-        // Numéro de salle
         Label numeroLabel = new Label("Numéro salle:");
         numeroLabel.setStyle("-fx-font-weight: bold;");
-        
         TextField champNumero = new TextField(selection.getNumeroSalle());
         
-        // Capacité
         Label capaciteLabel = new Label("Capacité:");
         capaciteLabel.setStyle("-fx-font-weight: bold;");
-        
         Spinner<Integer> spinnerCapaciteInput = new Spinner<>(1, 500, selection.getCapacite());
         spinnerCapaciteInput.setEditable(true);
         
-        // Type
         Label typeLabel = new Label("Type:");
         typeLabel.setStyle("-fx-font-weight: bold;");
-        
         ComboBox<String> comboTypeInput = new ComboBox<>();
         comboTypeInput.getItems().addAll("TD", "TP", "AMPHI", "BIBLIOTHEQUE", "RESTAURANT");
         comboTypeInput.setValue(selection.getType());
         comboTypeInput.setPrefWidth(150);
         
-        // Équipements
         Label equipLabel = new Label("Équipements:");
         equipLabel.setStyle("-fx-font-weight: bold;");
-        
         CheckBox checkVideoprojInput = new CheckBox("Vidéoprojecteur");
         checkVideoprojInput.setSelected(selection.isAVideoprojecteur());
-        
         CheckBox checkTableauInput = new CheckBox("Tableau blanc");
         checkTableauInput.setSelected(selection.isATableauBlanc());
-        
         CheckBox checkClimInput = new CheckBox("Climatisation");
         checkClimInput.setSelected(selection.isAClimatisation());
-        
         VBox equipBox = new VBox(5);
         equipBox.getChildren().addAll(checkVideoprojInput, checkTableauInput, checkClimInput);
         
-        // Message d'erreur
         Label messageLabel = new Label();
         messageLabel.setStyle("-fx-text-fill: #e74c3c;");
         
-        // Disposition
         int row = 0;
         grid.add(batimentLabel, 0, row);
         grid.add(comboBatimentInput, 1, row++);
@@ -480,7 +475,6 @@ public class VueSalles {
         
         dialog.setResultConverter(dialogButton -> {
             if (dialogButton == btnValider) {
-                // Validations
                 if (champNumero.getText().trim().isEmpty()) {
                     messageLabel.setText("❌ Le numéro de salle est obligatoire");
                     return null;
@@ -510,9 +504,15 @@ public class VueSalles {
     }
     
     // ============================================
-    // CRUD COMPLET - SUPPRIMER UNE SALLE
+    // CRUD - SUPPRIMER UNE SALLE (admin uniquement)
     // ============================================
     private void supprimerSalle() {
+        // Vérification supplémentaire de sécurité
+        if (!utilisateurCourant.getRole().equals("admin")) {
+            showAlert("Accès refusé", "Vous n'avez pas les droits pour supprimer une salle.", Alert.AlertType.ERROR);
+            return;
+        }
+        
         Salle selection = tableSalles.getSelectionModel().getSelectedItem();
         if (selection == null) {
             showAlert("Attention", "⚠️ Veuillez sélectionner une salle à supprimer", Alert.AlertType.WARNING);
@@ -524,7 +524,7 @@ public class VueSalles {
         confirm.setHeaderText("🗑️ Supprimer la salle");
         confirm.setContentText("Voulez-vous vraiment supprimer définitivement la salle " + 
                                selection.getNomCompletSalle() + " ?\n\n" +
-                               "⚠️ Cette action est irréversible et supprimera toutes les réservations associées.");
+                               "⚠️ Cette action est irréversible.");
         
         ButtonType btnOui = new ButtonType("Oui, supprimer", ButtonBar.ButtonData.OK_DONE);
         ButtonType btnNon = new ButtonType("Annuler", ButtonBar.ButtonData.CANCEL_CLOSE);
@@ -536,7 +536,7 @@ public class VueSalles {
                     chargerSalles();
                     showAlert("Succès", "✅ Salle supprimée avec succès", Alert.AlertType.INFORMATION);
                 } else {
-                    showAlert("Erreur", "❌ Échec de la suppression. Vérifiez qu'aucune réservation n'est liée à cette salle.", Alert.AlertType.ERROR);
+                    showAlert("Erreur", "❌ Échec de la suppression", Alert.AlertType.ERROR);
                 }
             }
         });

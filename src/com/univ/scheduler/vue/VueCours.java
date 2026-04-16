@@ -703,7 +703,7 @@ public class VueCours {
         return true;
     }
     
-    private void verifierConflits() {
+    public void verifierConflits() {
         List<Cours[]> conflits = coursDAO.getTousLesConflits();
         
         if (conflits.isEmpty()) {
@@ -988,5 +988,9 @@ public class VueCours {
     
     public BorderPane getRacine() {
         return racine;
+    }
+    public void verifierConflit() {
+        // Appeler la méthode existante
+        verifierConflits();
     }
 }
