@@ -43,7 +43,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
-public class VueCours {
+public class VueCours extends VueBase {
     private BorderPane racine;
     private Utilisateur utilisateurCourant;
     private Stage stagePrincipal;
@@ -120,6 +120,7 @@ public class VueCours {
     
     private void creerVue() {
         racine = new BorderPane();
+        appliquerFond(racine);
         racine.setPadding(new Insets(20));
         racine.setStyle("-fx-background-color: #f5f7fa;");
         

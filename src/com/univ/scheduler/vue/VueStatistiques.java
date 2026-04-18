@@ -42,7 +42,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.stream.Collectors;
 
-public class VueStatistiques {
+public class VueStatistiques extends VueBase{
     private BorderPane racine;
     private Utilisateur utilisateurCourant;
     private SalleDAO salleDAO;
@@ -118,6 +118,7 @@ public class VueStatistiques {
     
     private void creerVue() {
         racine = new BorderPane();
+        appliquerFond(racine);
         racine.setPadding(new Insets(20));
         racine.setStyle("-fx-background-color: " + FOND_PRINCIPAL + ";");
         

@@ -26,7 +26,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
-public class VueSalles {
+public class VueSalles extends VueBase{
     private BorderPane racine;
     private Utilisateur utilisateurCourant;
     private Stage stagePrincipal;
@@ -40,6 +40,7 @@ public class VueSalles {
     private ObservableList<Salle> toutesSalles;
     private Label infoLabel;
     private Timeline synchronisationTimer;
+    private final String FOND_PRINCIPAL = "linear-gradient(from 0% 0% to 100% 100%, #0b3b3f 0%, #1a6b5a 50%, #2d8f6e 100%)";
     
     public VueSalles(Utilisateur utilisateur, Stage stage) {
         this.utilisateurCourant = utilisateur;
@@ -71,30 +72,43 @@ public class VueSalles {
     
     private void creerVue() {
         racine = new BorderPane();
+        appliquerFond(racine);
         racine.setPadding(new Insets(20));
-        racine.setStyle("-fx-background-color: #f5f7fa;");
+        racine.setStyle("-fx-background-color: " + FOND_PRINCIPAL + ";");
         
         // Titre
         Label titreLabel = new Label("🏢 Gestion des salles");
         if (!utilisateurCourant.getRole().equals("admin")) {
             titreLabel.setText("🏢 Consultation des salles");
         }
-        titreLabel.setStyle("-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;");
+        titreLabel.setStyle("-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: #ffffff;");
         
         infoLabel = new Label("Mise à jour toutes les 30 secondes");
-        infoLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #7f8c8d;");
+        infoLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #d4e6e1;");
         
-        // Panneau de recherche
+        // Panneau de recherche (fond blanc)
         VBox rechercheBox = new VBox(10);
         rechercheBox.setPadding(new Insets(15, 0, 20, 0));
-        rechercheBox.setStyle("-fx-background-color: white; -fx-border-radius: 5; -fx-padding: 15; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 5, 0, 0, 2);");
+        rechercheBox.setStyle(
+            "-fx-background-color: rgba(255,255,255,0.95);" +
+            "-fx-background-radius: 15;" +
+            "-fx-padding: 15;" +
+            "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 10, 0, 0, 2);"
+        );
         
         Label rechercheLabel = new Label("🔍 Rechercher une salle :");
-        rechercheLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #34495e;");
+        rechercheLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;");
         
         champRecherche = new TextField();
         champRecherche.setPromptText("Numéro de salle...");
         champRecherche.setPrefWidth(300);
+        champRecherche.setStyle(
+            "-fx-background-color: white;" +
+            "-fx-background-radius: 10;" +
+            "-fx-border-color: #e0e0e0;" +
+            "-fx-border-radius: 10;" +
+            "-fx-padding: 8 12;"
+        );
         champRecherche.textProperty().addListener((obs, oldVal, newVal) -> rechercherSalles());
         
         // Filtres avancés
@@ -104,6 +118,8 @@ public class VueSalles {
         filtresPane.setPadding(new Insets(15, 0, 5, 0));
         
         Label batimentLabel = new Label("Bâtiment :");
+        batimentLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #2c3e50;");
+        
         comboBatiment = new ComboBox<>();
         comboBatiment.getItems().add("Tous");
         comboBatiment.getItems().addAll(
@@ -111,28 +127,50 @@ public class VueSalles {
             "Amphithéâtres", "Bibliothèque", "Restaurants"
         );
         comboBatiment.setValue("Tous");
+        comboBatiment.setStyle("-fx-background-color: white; -fx-border-color: #e0e0e0; -fx-border-radius: 10; -fx-padding: 5;");
         comboBatiment.setOnAction(e -> rechercherSalles());
         
         Label typeLabel = new Label("Type :");
+        typeLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #2c3e50;");
+        
         comboType = new ComboBox<>();
         comboType.getItems().addAll("Tous", "TD", "TP", "AMPHI", "BIBLIOTHEQUE", "RESTAURANT");
         comboType.setValue("Tous");
+        comboType.setStyle("-fx-background-color: white; -fx-border-color: #e0e0e0; -fx-border-radius: 10; -fx-padding: 5;");
         comboType.setOnAction(e -> rechercherSalles());
         
         Label capaciteLabel = new Label("Capacité min :");
+        capaciteLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #2c3e50;");
+        
         spinnerCapacite = new Spinner<>(0, 500, 0);
         spinnerCapacite.setEditable(true);
+        spinnerCapacite.setStyle("-fx-background-color: white; -fx-border-color: #e0e0e0; -fx-border-radius: 10;");
         spinnerCapacite.valueProperty().addListener((obs, oldVal, newVal) -> rechercherSalles());
         
         checkVideoproj = new CheckBox("Avec vidéoprojecteur");
+        checkVideoproj.setStyle("-fx-text-fill: #2c3e50;");
         checkVideoproj.setOnAction(e -> rechercherSalles());
         
         Button btnReinitialiser = new Button("Réinitialiser");
-        btnReinitialiser.setStyle("-fx-background-color: #95a5a6; -fx-text-fill: white; -fx-cursor: hand;");
+        btnReinitialiser.setStyle(
+            "-fx-background-color: #95a5a6;" +
+            "-fx-text-fill: white;" +
+            "-fx-font-weight: bold;" +
+            "-fx-background-radius: 25;" +
+            "-fx-cursor: hand;" +
+            "-fx-padding: 8 15;"
+        );
         btnReinitialiser.setOnAction(e -> reinitialiserFiltres());
         
         Button btnActualiser = new Button("🔄 Actualiser");
-        btnActualiser.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-cursor: hand;");
+        btnActualiser.setStyle(
+            "-fx-background-color: #3498db;" +
+            "-fx-text-fill: white;" +
+            "-fx-font-weight: bold;" +
+            "-fx-background-radius: 25;" +
+            "-fx-cursor: hand;" +
+            "-fx-padding: 8 15;"
+        );
         btnActualiser.setOnAction(e -> chargerSalles());
         
         filtresPane.add(batimentLabel, 0, 0);
@@ -154,7 +192,11 @@ public class VueSalles {
         // Tableau des salles
         tableSalles = new TableView<>();
         tableSalles.setPrefHeight(400);
-        tableSalles.setStyle("-fx-font-size: 13px;");
+        tableSalles.setStyle(
+            "-fx-background-color: rgba(255,255,255,0.95);" +
+            "-fx-background-radius: 15;" +
+            "-fx-font-size: 13px;"
+        );
         
         TableColumn<Salle, String> colBatiment = new TableColumn<>("Bâtiment");
         colBatiment.setCellValueFactory(new PropertyValueFactory<>("nomBatiment"));
@@ -195,27 +237,55 @@ public class VueSalles {
         // Seul l'ADMIN peut ajouter, modifier et supprimer des salles
         if (utilisateurCourant.getRole().equals("admin")) {
             Button btnAjouter = new Button("➕ Ajouter une salle");
-            btnAjouter.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;");
+            btnAjouter.setStyle(
+                "-fx-background-color: #2ecc71;" +
+                "-fx-text-fill: white;" +
+                "-fx-font-weight: bold;" +
+                "-fx-background-radius: 25;" +
+                "-fx-cursor: hand;" +
+                "-fx-padding: 8 15;"
+            );
             btnAjouter.setOnAction(e -> ajouterSalle());
             
             Button btnModifier = new Button("✏️ Modifier");
-            btnModifier.setStyle("-fx-background-color: #f39c12; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;");
+            btnModifier.setStyle(
+                "-fx-background-color: #f39c12;" +
+                "-fx-text-fill: white;" +
+                "-fx-font-weight: bold;" +
+                "-fx-background-radius: 25;" +
+                "-fx-cursor: hand;" +
+                "-fx-padding: 8 15;"
+            );
             btnModifier.setOnAction(e -> modifierSalle());
             
             Button btnSupprimer = new Button("🗑️ Supprimer");
-            btnSupprimer.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;");
+            btnSupprimer.setStyle(
+                "-fx-background-color: #e74c3c;" +
+                "-fx-text-fill: white;" +
+                "-fx-font-weight: bold;" +
+                "-fx-background-radius: 25;" +
+                "-fx-cursor: hand;" +
+                "-fx-padding: 8 15;"
+            );
             btnSupprimer.setOnAction(e -> supprimerSalle());
             
             boutonsBox.getChildren().addAll(btnAjouter, btnModifier, btnSupprimer);
         } else {
             // Pour les autres rôles (manager, enseignant, étudiant) : consultation seule
             Label consultationLabel = new Label("ℹ️ Mode consultation - Vous ne pouvez pas modifier les salles");
-            consultationLabel.setStyle("-fx-text-fill: #7f8c8d; -fx-font-style: italic; -fx-padding: 8 0;");
+            consultationLabel.setStyle("-fx-text-fill: #d4e6e1; -fx-font-style: italic; -fx-padding: 8 0;");
             boutonsBox.getChildren().add(consultationLabel);
         }
         
         Button btnExporter = new Button("📥 Exporter PDF");
-        btnExporter.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;");
+        btnExporter.setStyle(
+            "-fx-background-color: #3498db;" +
+            "-fx-text-fill: white;" +
+            "-fx-font-weight: bold;" +
+            "-fx-background-radius: 25;" +
+            "-fx-cursor: hand;" +
+            "-fx-padding: 8 15;"
+        );
         btnExporter.setOnAction(e -> exporterSalles());
         
         Region spacer = new Region();
@@ -276,14 +346,13 @@ public class VueSalles {
         comboType.setValue("Tous");
         spinnerCapacite.getValueFactory().setValue(0);
         checkVideoproj.setSelected(false);
-        tableSalles.setItems(toutesSalles);
+        rechercherSalles();
     }
     
     // ============================================
     // CRUD - AJOUTER UNE SALLE (admin uniquement)
     // ============================================
     private void ajouterSalle() {
-        // Vérification supplémentaire de sécurité
         if (!utilisateurCourant.getRole().equals("admin")) {
             showAlert("Accès refusé", "Vous n'avez pas les droits pour ajouter une salle.", Alert.AlertType.ERROR);
             return;
@@ -301,6 +370,7 @@ public class VueSalles {
         grid.setVgap(10);
         grid.setPadding(new Insets(20));
         grid.setPrefWidth(400);
+        grid.setStyle("-fx-background-color: white; -fx-background-radius: 15;");
         
         Label batimentLabel = new Label("Bâtiment:");
         batimentLabel.setStyle("-fx-font-weight: bold;");
@@ -392,7 +462,6 @@ public class VueSalles {
     // CRUD - MODIFIER UNE SALLE (admin uniquement)
     // ============================================
     private void modifierSalle() {
-        // Vérification supplémentaire de sécurité
         if (!utilisateurCourant.getRole().equals("admin")) {
             showAlert("Accès refusé", "Vous n'avez pas les droits pour modifier une salle.", Alert.AlertType.ERROR);
             return;
@@ -416,6 +485,7 @@ public class VueSalles {
         grid.setVgap(10);
         grid.setPadding(new Insets(20));
         grid.setPrefWidth(400);
+        grid.setStyle("-fx-background-color: white; -fx-background-radius: 15;");
         
         Label batimentLabel = new Label("Bâtiment:");
         batimentLabel.setStyle("-fx-font-weight: bold;");
@@ -507,7 +577,6 @@ public class VueSalles {
     // CRUD - SUPPRIMER UNE SALLE (admin uniquement)
     // ============================================
     private void supprimerSalle() {
-        // Vérification supplémentaire de sécurité
         if (!utilisateurCourant.getRole().equals("admin")) {
             showAlert("Accès refusé", "Vous n'avez pas les droits pour supprimer une salle.", Alert.AlertType.ERROR);
             return;

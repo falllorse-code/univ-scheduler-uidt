@@ -29,7 +29,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
-public class VueReservation {
+public class VueReservation extends VueBase{
     private BorderPane racine;
     private Utilisateur utilisateurCourant;
     private ReservationDAO reservationDAO;
@@ -84,6 +84,7 @@ public class VueReservation {
     
     private void creerVue() {
         racine = new BorderPane();
+        appliquerFond(racine);
         racine.setPadding(new Insets(20));
         racine.setStyle("-fx-background-color: #f5f7fa;");
         

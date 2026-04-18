@@ -26,7 +26,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class VueEmploiTemps {
+public class VueEmploiTemps extends VueBase{
     private BorderPane racine;
     private Utilisateur utilisateurCourant;
     private Stage stagePrincipal;
@@ -176,6 +176,7 @@ public class VueEmploiTemps {
     
     private void creerVue() {
         racine = new BorderPane();
+        appliquerFond(racine);
         racine.setPadding(new Insets(20));
         racine.setStyle("-fx-background-color: linear-gradient(to bottom, #f5f7fa, #e4e8ec);");
         

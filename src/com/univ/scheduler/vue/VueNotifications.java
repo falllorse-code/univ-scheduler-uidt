@@ -16,7 +16,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
-public class VueNotifications {
+public class VueNotifications extends VueBase {
     private BorderPane racine;
     private Utilisateur utilisateurCourant;
     private SignalementDAO signalementDAO;
@@ -34,6 +34,7 @@ public class VueNotifications {
     
     private void creerVue() {
         racine = new BorderPane();
+        appliquerFond(racine);
         racine.setPadding(new Insets(20));
         racine.setStyle("-fx-background-color: #f5f7fa;");
         

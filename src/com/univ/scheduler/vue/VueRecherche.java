@@ -37,7 +37,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 
-public class VueRecherche {
+public class VueRecherche extends VueBase {
     private BorderPane racine;
     private Utilisateur utilisateurCourant;
     private SalleDAO salleDAO;
@@ -88,6 +88,7 @@ public class VueRecherche {
     
     private void creerVue() {
         racine = new BorderPane();
+        appliquerFond(racine);
         racine.setPadding(new Insets(20));
         racine.setStyle("-fx-background-color: #f5f7fa;");
         

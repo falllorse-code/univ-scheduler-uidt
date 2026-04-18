@@ -18,7 +18,7 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.util.Callback;
 
-public class VueUtilisateurs {
+public class VueUtilisateurs extends VueBase{
     private BorderPane racine;
     private Utilisateur utilisateurCourant;
     private UtilisateurDAO utilisateurDAO;
@@ -54,6 +54,7 @@ public class VueUtilisateurs {
     
     private void creerVue() {
         racine.setPadding(new Insets(20));
+        appliquerFond(racine);
         racine.setStyle("-fx-background-color: " + FOND_PRINCIPAL + ";");
         
         // Titre

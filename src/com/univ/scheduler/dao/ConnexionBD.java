@@ -5,7 +5,7 @@ import java.sql.*;
 public class ConnexionBD {
     private static final String URL = "jdbc:mysql://localhost:3306/univ_scheduler";
     private static final String UTILISATEUR = "root";
-    private static final String MOT_DE_PASSE = "papito"; // Mets ton mot de passe ici si nécessaire
+    private static final String MOT_DE_PASSE = ""; // Mets ton mot de passe ici si nécessaire
     
     private static Connection connexion = null;
     
